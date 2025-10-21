@@ -19,3 +19,6 @@ def get_db_connection():
     except mysql.connector.Error as e:
         print(f"Error connecting to MySQL Database: {e}")
         return None
+
+
+###this is trail to test push
