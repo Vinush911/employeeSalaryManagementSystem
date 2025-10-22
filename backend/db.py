@@ -20,5 +20,3 @@ def get_db_connection():
         print(f"Error connecting to MySQL Database: {e}")
         return None
 
-
-###this is trail to test push

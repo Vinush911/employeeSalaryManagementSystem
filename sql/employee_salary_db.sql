@@ -125,3 +125,6 @@ SELECT
     ) AS department_salary_rank
 FROM Employee e
 JOIN Salary s ON e.employee_id = s.employee_id;
+
+
+select *from employee;
