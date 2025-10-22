@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Salary Slip</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'Roboto Mono', monospace;
-            -webkit-print-color-adjust: exact; /* Important for printing backgrounds */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            -webkit-print-color-adjust: exact; /* Ensures colors print correctly in Chrome */
+            color-adjust: exact;
         }
         @media print {
             body {
@@ -19,95 +20,116 @@
             .no-print {
                 display: none;
             }
+            .print-container {
+                box-shadow: none;
+                border: none;
+                width: 100%;
+                max-width: 100%;
+                padding: 0;
+            }
         }
     </style>
 </head>
 <body class="bg-gray-100">
-    <div class="container mx-auto p-4 md:p-8 max-w-2xl">
-        <div class="bg-white p-8 rounded-lg shadow-lg" id="slip-content">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-3xl">
+        <header class="mb-4 no-print">
+            <a href="javascript:history.back()" class="text-blue-500 hover:underline">&larr; Back to Salary Page</a>
+        </header>
+
+        <div id="salary-slip-content" class="print-container bg-white p-8 md:p-12 rounded-lg shadow-lg border">
             <!-- Header -->
-            <div class="flex justify-between items-center border-b-2 pb-4">
+            <div class="flex justify-between items-center border-b pb-4 mb-6">
                 <div>
-                    <h1 class="text-2xl font-bold">Salary Slip</h1>
-                    <p class="text-gray-500">Your Company Inc.</p>
+                    <h1 class="text-3xl font-bold text-gray-800">Salary Slip</h1>
+                    <p class="text-gray-500">Employee Management System</p>
                 </div>
                 <div class="text-right">
-                    <p class="font-semibold" id="slip-month">Month, YYYY</p>
+                    <p class="font-semibold text-gray-700">Pay Period:</p>
+                    <p id="slip-pay-period" class="text-gray-600">Loading...</p>
                 </div>
             </div>
 
             <!-- Employee Details -->
-            <div class="grid grid-cols-2 gap-4 mt-6">
-                <div>
-                    <p class="text-sm text-gray-500">Employee Name</p>
-                    <p class="font-bold" id="emp-name">Loading...</p>
-                </div>
-                <div class="text-right">
-                    <p class="text-sm text-gray-500">Department</p>
-                    <p class="font-bold" id="emp-department">Loading...</p>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">Position</p>
-                    <p class="font-bold" id="emp-position">Loading...</p>
-                </div>
-                 <div class="text-right">
-                    <p class="text-sm text-gray-500">Salary ID</p>
-                    <p class="font-bold" id="salary-id">Loading...</p>
+            <div class="mb-8">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-2 mb-4">Employee Details</h2>
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p class="font-medium text-gray-500">Employee Name</p>
+                        <p id="slip-employee-name" class="font-bold text-gray-800">Loading...</p>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-500">Department</p>
+                        <p id="slip-department" class="font-bold text-gray-800">Loading...</p>
+                    </div>
+                    <div>
+                        <p class="font-medium text-gray-500">Position</p>
+                        <p id="slip-position" class="font-bold text-gray-800">Loading...</p>
+                    </div>
                 </div>
             </div>
 
             <!-- Earnings and Deductions -->
-            <div class="grid grid-cols-2 gap-8 mt-8">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <!-- Earnings -->
                 <div>
-                    <h3 class="font-bold text-lg border-b pb-2 mb-2">Earnings</h3>
-                    <div class="flex justify-between py-1">
-                        <span>Base Salary</span>
-                        <span id="earn-base">₹0.00</span>
-                    </div>
-                    <div class="flex justify-between py-1">
-                        <span>Overtime Pay</span>
-                        <span id="earn-overtime">₹0.00</span>
-                    </div>
-                    <div class="flex justify-between py-1">
-                        <span>Bonus</span>
-                        <span id="earn-bonus">₹0.00</span>
-                    </div>
-                    <div class="flex justify-between py-2 mt-2 border-t font-bold">
-                        <span>Total Earnings</span>
-                        <span id="total-earnings">₹0.00</span>
+                    <h3 class="text-lg font-semibold text-green-700 bg-green-50 p-3 rounded-t-md">Earnings</h3>
+                    <div class="border-l border-r border-b rounded-b-md">
+                        <div class="flex justify-between p-3 border-b">
+                            <span class="text-gray-600">Base Salary</span>
+                            <span id="slip-base-salary" class="font-medium text-gray-800">Loading...</span>
+                        </div>
+                        <div class="flex justify-between p-3 border-b">
+                            <span class="text-gray-600">Overtime Pay</span>
+                            <span id="slip-overtime-pay" class="font-medium text-gray-800">Loading...</span>
+                        </div>
+                        <div class="flex justify-between p-3">
+                            <span class="text-gray-600">Bonus</span>
+                            <span id="slip-bonus" class="font-medium text-gray-800">Loading...</span>
+                        </div>
+                        <div class="flex justify-between p-3 bg-gray-50 border-t">
+                            <span class="font-bold text-gray-800">Total Earnings</span>
+                            <span id="slip-total-earnings" class="font-bold text-green-600">Loading...</span>
+                        </div>
                     </div>
                 </div>
+
                 <!-- Deductions -->
                 <div>
-                    <h3 class="font-bold text-lg border-b pb-2 mb-2">Deductions</h3>
-                    <div class="flex justify-between py-1">
-                        <span>Standard Deductions</span>
-                        <span id="deduct-standard">₹0.00</span>
-                    </div>
-                     <div class="flex justify-between py-1">
-                        <span>Provident Fund (PF)</span>
-                        <span id="deduct-pf">₹0.00</span>
-                    </div>
-                    <div class="flex justify-between py-2 mt-2 border-t font-bold">
-                        <span>Total Deductions</span>
-                        <span id="total-deductions">₹0.00</span>
+                    <h3 class="text-lg font-semibold text-red-700 bg-red-50 p-3 rounded-t-md">Deductions</h3>
+                    <div class="border-l border-r border-b rounded-b-md">
+                        <div class="flex justify-between p-3 border-b">
+                            <span class="text-gray-600">Deductions</span>
+                            <span id="slip-deductions" class="font-medium text-gray-800">Loading...</span>
+                        </div>
+                        <div class="flex justify-between p-3">
+                            <span class="text-gray-600">Provident Fund (PF)</span>
+                            <span id="slip-pf" class="font-medium text-gray-800">Loading...</span>
+                        </div>
+                        <div class="flex justify-between p-3 bg-gray-50 border-t">
+                            <span class="font-bold text-gray-800">Total Deductions</span>
+                            <span id="slip-total-deductions" class="font-bold text-red-600">Loading...</span>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <!-- Net Salary -->
-            <div class="mt-8 bg-gray-100 p-4 rounded-lg flex justify-between items-center">
-                <h2 class="text-xl font-bold">Net Salary Payable</h2>
-                <p class="text-2xl font-bold" id="net-salary">₹0.00</p>
+            <div class="mt-8 pt-6 border-t-2 border-dashed">
+                <div class="flex justify-between items-center bg-blue-50 p-6 rounded-lg">
+                    <h2 class="text-2xl font-bold text-blue-800">Net Salary</h2>
+                    <p id="slip-net-salary" class="text-3xl font-bold text-blue-800">Loading...</p>
+                </div>
+                <div class="mt-2 text-right">
+                    <p id="slip-net-in-words" class="text-sm text-gray-600 font-medium"></p>
+                </div>
             </div>
         </div>
 
-        <div class="text-center mt-6 no-print">
-            <p class="text-gray-500">Your browser's print dialog should open automatically. If not, press Ctrl/Cmd + P.</p>
-        </div>
     </div>
-    <script src="slip.js"></script>
+
+    <!-- This script runs after the page is secured -->
+    <script src="slip.js" defer></script>
 </body>
 </html>
 

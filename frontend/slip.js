@@ -1,83 +1,89 @@
+// This ensures the page is protected
 document.addEventListener('DOMContentLoaded', () => {
-    const slipMonth = document.getElementById('slip-month');
-    const empName = document.getElementById('emp-name');
-    const empDepartment = document.getElementById('emp-department');
-    const empPosition = document.getElementById('emp-position');
-    const salaryIdEl = document.getElementById('salary-id');
-    
-    // Earnings
-    const earnBase = document.getElementById('earn-base');
-    const earnOvertime = document.getElementById('earn-overtime');
-    const earnBonus = document.getElementById('earn-bonus');
-    const totalEarnings = document.getElementById('total-earnings');
+    // Check auth status first
+    fetch('/api/check-auth', { credentials: 'include' })
+        .then(res => res.json())
+        .then(data => {
+            if (!data.logged_in) {
+                window.location.href = 'login.html';
+            } else {
+                // If logged in, run the page logic
+                runSlipLogic();
+            }
+        });
+});
 
-    // Deductions
-    const deductStandard = document.getElementById('deduct-standard');
-    const deductPf = document.getElementById('deduct-pf');
-    const totalDeductions = document.getElementById('total-deductions');
-    
-    // Net
-    const netSalary = document.getElementById('net-salary');
+function runSlipLogic() {
+    const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
+    // Get salary ID from URL
     const urlParams = new URLSearchParams(window.location.search);
-    const salaryId = urlParams.get('id');
+    const salaryId = urlParams.get('salary_id');
 
     if (!salaryId) {
-        document.body.innerHTML = '<h1 class="text-red-500 text-center mt-10">Error: Salary ID not provided.</h1>';
+        document.body.innerHTML = '<h1>Error: No Salary ID provided.</h1><a href="index.html">Back to Dashboard</a>';
         return;
     }
 
-    const formatCurrency = (amount) => {
-        // Ensure amount is a number, default to 0 if not
-        const numericAmount = Number(amount) || 0;
-        return numericAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+    // --- HELPER FUNCTIONS ---
+    const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
+    
+    const formatMonthYear = (dateString) => {
+        if (!dateString) return 'Invalid Date';
+        const date = new Date(dateString + 'T00:00:00'); // Fix for timezone issues
+        return date.toLocaleString('en-GB', { month: 'long', year: 'numeric' });
     };
 
-    const formatMonth = (dateString) => {
-        // Add a day to the YYYY-MM string to ensure correct parsing
-        return new Date(dateString + '-02').toLocaleString('default', { month: 'long', year: 'numeric' });
-    };
-
-
-    async function fetchAndRenderSlip() {
+    // --- DATA FETCHING AND POPULATING ---
+    async function fetchAndPopulateSlip() {
         try {
-            const response = await fetch(`http://127.0.0.1:5000/api/salaries/${salaryId}`);
-            if (!response.ok) throw new Error('Could not fetch salary slip data.');
+            const response = await fetch(`${API_BASE_URL}/salaries/${salaryId}`, { credentials: 'include' });
+            if (!response.ok) throw new Error('Failed to fetch salary slip data');
             const data = await response.json();
 
-            // Populate Header and Employee Info
-            slipMonth.textContent = formatMonth(data.month);
-            empName.textContent = data.name;
-            empDepartment.textContent = data.department;
-            empPosition.textContent = data.position;
-            salaryIdEl.textContent = `#${data.salary_id}`;
+            // Populate Employee Details
+            document.getElementById('slip-pay-period').textContent = formatMonthYear(data.month);
+            document.getElementById('slip-employee-name').textContent = data.name;
+            document.getElementById('slip-department').textContent = data.department;
+            document.getElementById('slip-position').textContent = data.position;
 
             // Populate Earnings
-            const totalEarn = (Number(data.base_salary) || 0) + (Number(data.overtime_pay) || 0) + (Number(data.bonus) || 0);
-            earnBase.textContent = formatCurrency(data.base_salary);
-            earnOvertime.textContent = formatCurrency(data.overtime_pay);
-            earnBonus.textContent = formatCurrency(data.bonus);
-            totalEarnings.textContent = formatCurrency(totalEarn);
-            
+            const base = data.base_salary || 0;
+            const overtime = data.overtime_pay || 0;
+            const bonus = data.bonus || 0;
+            const totalEarnings = base + overtime + bonus;
+
+            document.getElementById('slip-base-salary').textContent = formatCurrency(base);
+            document.getElementById('slip-overtime-pay').textContent = formatCurrency(overtime);
+            document.getElementById('slip-bonus').textContent = formatCurrency(bonus);
+            document.getElementById('slip-total-earnings').textContent = formatCurrency(totalEarnings);
+
             // Populate Deductions
-            const totalDeduct = (Number(data.deductions) || 0) + (Number(data.pf_amount) || 0);
-            deductStandard.textContent = formatCurrency(data.deductions);
-            deductPf.textContent = formatCurrency(data.pf_amount);
-            totalDeductions.textContent = formatCurrency(totalDeduct);
+            const deductions = data.deductions || 0;
+            const pf = data.pf_amount || 0;
+            const totalDeductions = deductions + pf;
+
+            document.getElementById('slip-deductions').textContent = formatCurrency(deductions);
+            document.getElementById('slip-pf').textContent = formatCurrency(pf);
+            document.getElementById('slip-total-deductions').textContent = formatCurrency(totalDeductions);
 
             // Populate Net Salary
-            netSalary.textContent = formatCurrency(data.total_salary);
+            const netSalary = data.total_salary;
+            document.getElementById('slip-net-salary').textContent = formatCurrency(netSalary);
             
-            // Trigger print dialog after a short delay to allow content to render
+            // Trigger print dialog automatically
+            // We use a small timeout to ensure all content is rendered before printing
             setTimeout(() => {
                 window.print();
             }, 500);
 
         } catch (error) {
-            document.getElementById('slip-content').innerHTML = `<p class="text-red-500 text-center">${error.message}</p>`;
+            console.error('Error fetching salary slip:', error);
+            document.getElementById('salary-slip-content').innerHTML = `<h1 class="text-red-500">Error: ${error.message}</h1>`;
         }
     }
 
-    fetchAndRenderSlip();
-});
+    // --- INITIAL LOAD ---
+    fetchAndPopGopulateSlip();
+}
 

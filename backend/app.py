@@ -7,7 +7,6 @@ import datetime
 import os
 
 app = Flask(__name__)
-# It's crucial to set a secret key for session management
 app.secret_key = os.urandom(24) 
 CORS(app, supports_credentials=True)
 
@@ -34,19 +33,12 @@ def register():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-
-    if not username or not password:
-        return jsonify({"error": "Username and password are required"}), 400
-
+    if not username or not password: return jsonify({"error": "Username and password are required"}), 400
     conn = get_db_connection()
     if conn is None: return jsonify({"error": "Database connection failed"}), 500
     cursor = conn.cursor(dictionary=True)
-
-    # Check if user already exists
     cursor.execute("SELECT * FROM users WHERE username = %s", (username,))
-    if cursor.fetchone():
-        return jsonify({"error": "Username already exists"}), 409
-
+    if cursor.fetchone(): return jsonify({"error": "Username already exists"}), 409
     hashed_password = generate_password_hash(password)
     cursor.execute("INSERT INTO users (username, password_hash) VALUES (%s, %s)", (username, hashed_password))
     conn.commit()
@@ -59,7 +51,6 @@ def login():
     data = request.get_json()
     username = data.get('username')
     password = data.get('password')
-
     conn = get_db_connection()
     if conn is None: return jsonify({"error": "Database connection failed"}), 500
     cursor = conn.cursor(dictionary=True)
@@ -67,7 +58,6 @@ def login():
     user = cursor.fetchone()
     cursor.close()
     conn.close()
-
     if user and check_password_hash(user['password_hash'], password):
         session['user_id'] = user['id'] 
         session['username'] = user['username']
@@ -87,7 +77,41 @@ def check_auth():
         return jsonify({"logged_in": True, "username": session.get('username')})
     return jsonify({"logged_in": False})
 
+# --- NEW: DASHBOARD STATS ROUTE ---
+@app.route('/api/dashboard-stats', methods=['GET'])
+@login_required
+def get_dashboard_stats():
+    try:
+        conn = get_db_connection()
+        if conn is None: return jsonify({"error": "Database connection failed"}), 500
+        cursor = conn.cursor(dictionary=True)
+
+        # Query for total employees
+        cursor.execute("SELECT COUNT(*) as total_employees FROM Employee")
+        total_employees = cursor.fetchone()['total_employees']
+
+        # Query for total departments
+        cursor.execute("SELECT COUNT(DISTINCT department) as total_departments FROM Employee")
+        total_departments = cursor.fetchone()['total_departments']
+
+        # Query for average salary
+        cursor.execute("SELECT AVG(base_salary) as average_salary FROM Employee")
+        average_salary = cursor.fetchone()['average_salary'] or 0
+
+        cursor.close()
+        conn.close()
+
+        return jsonify({
+            "total_employees": total_employees,
+            "total_departments": total_departments,
+            "average_salary": average_salary
+        })
+    except Exception as e:
+        print(f"Error in /api/dashboard-stats: {e}")
+        return jsonify({"error": "Could not fetch dashboard stats"}), 500
+
 # --- PROTECTED DATA ROUTES ---
+# ... (All other existing routes for employees, salaries, attendance, reports remain the same) ...
 @app.route('/api/employees', methods=['GET'])
 @login_required
 def get_employees():
@@ -121,8 +145,6 @@ def get_employees():
         "employees": format_dates(employees),
         "departments": departments
     })
-
-# ... (All other existing routes for employees, salaries, attendance, reports) ...
 @app.route('/api/employees/<int:employee_id>', methods=['GET'])
 @login_required
 def get_employee(employee_id):
@@ -282,7 +304,7 @@ def get_department_salaries():
     except Exception as e:
         print(f"Error in /api/reports/department-salaries: {e}")
         return jsonify({"error": "Could not generate report"}), 500
-
+        
 if __name__ == '__main__':
     app.run(debug=True)
 

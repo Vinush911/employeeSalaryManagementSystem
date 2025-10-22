@@ -10,7 +10,6 @@
     <style>
         body { font-family: 'Inter', sans-serif; }
     </style>
-    <!-- IMPORTANT: Auth script runs first to protect the page -->
     <script src="auth.js" defer></script>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -31,6 +30,29 @@
     </header>
 
     <div class="container mx-auto p-4 sm:p-6 lg:p-8">
+        
+        <!-- NEW: Stat Cards Section -->
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Total Employees</p>
+                    <p id="total-employees" class="text-3xl font-bold text-gray-800">...</p>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Total Departments</p>
+                    <p id="total-departments" class="text-3xl font-bold text-gray-800">...</p>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-lg shadow-md flex items-center">
+                <div>
+                    <p class="text-sm font-medium text-gray-500">Average Base Salary</p>
+                    <p id="average-salary" class="text-3xl font-bold text-gray-800">...</p>
+                </div>
+            </div>
+        </section>
+
         <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <!-- Left Column: Form and Chart -->
             <div class="lg:col-span-1 space-y-8">

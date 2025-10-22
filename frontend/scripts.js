@@ -6,6 +6,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const departmentFilter = document.getElementById('department-filter');
     const departmentChartCanvas = document.getElementById('department-chart');
     
+    // Stat Card Selectors
+    const totalEmployeesEl = document.getElementById('total-employees');
+    const totalDepartmentsEl = document.getElementById('total-departments');
+    const averageSalaryEl = document.getElementById('average-salary');
+
     // Edit Modal Elements
     const editModal = document.getElementById('edit-modal');
     const editForm = document.getElementById('edit-form');
@@ -21,12 +26,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmNoButton = document.getElementById('confirm-no');
 
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
-    let departmentChart = null; // To hold the chart instance
-    let employeeToDeleteId = null; // To hold the ID of the employee to be deleted
+    let departmentChart = null; 
+    let employeeToDeleteId = null;
 
     // --- HELPER FUNCTIONS ---
     const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
-    const formatDate = (dateString) => dateString ? new Date(dateString.split(' ')[0]).toLocaleDateString('en-GB') : 'N/A'; // Handles YYYY-MM-DD format
+    const formatDate = (dateString) => dateString ? new Date(dateString.split(' ')[0]).toLocaleDateString('en-GB') : 'N/A';
 
     const showNotification = (message, isError = false) => {
         notificationMessage.textContent = message;
@@ -44,25 +49,45 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- DATA FETCHING & RENDERING ---
+    async function fetchDashboardStats() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/dashboard-stats`, { credentials: 'include' });
+            if (!response.ok) throw new Error('Failed to fetch stats');
+            const stats = await response.json();
+
+            totalEmployeesEl.textContent = stats.total_employees;
+            totalDepartmentsEl.textContent = stats.total_departments;
+            averageSalaryEl.textContent = formatCurrency(stats.average_salary);
+        } catch (error) {
+            console.error('Error fetching dashboard stats:', error);
+            totalEmployeesEl.textContent = 'N/A';
+            totalDepartmentsEl.textContent = 'N/A';
+            averageSalaryEl.textContent = 'N/A';
+        }
+    }
+
     async function fetchEmployees(searchTerm = '', department = '') {
         try {
             const response = await fetch(`${API_BASE_URL}/employees?search=${searchTerm}&department=${department}`, {
                 credentials: 'include' 
             });
             if (!response.ok) {
-                // If unauthorized, the auth.js script will handle redirection
                 if(response.status === 401) return; 
                 throw new Error('Failed to fetch data');
             }
             const data = await response.json();
 
             // Populate table
-            employeeTableBody.innerHTML = ''; // Clear existing rows
+            employeeTableBody.innerHTML = ''; 
             if (data.employees.length === 0) {
                 employeeTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4">No employees found.</td></tr>`;
             } else {
                 data.employees.forEach(emp => {
                     const row = document.createElement('tr');
+                    
+                    // --- THIS IS THE FIX ---
+                    // Ensure Salary and Attendance are <a> tags (links) 
+                    // and Edit/Delete are <button> tags with data-action.
                     row.innerHTML = `
                         <td class="py-2 px-4 border-b">${emp.employee_id}</td>
                         <td class="py-2 px-4 border-b">${emp.name}</td>
@@ -71,10 +96,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <td class="py-2 px-4 border-b">${formatDate(emp.joining_date)}</td>
                         <td class="py-2 px-4 border-b text-right">${formatCurrency(emp.base_salary)}</td>
                         <td class="py-2 px-4 border-b text-center space-x-1">
-                            <a href="attendance.html?employee_id=${emp.employee_id}" class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-bold py-1 px-2 rounded">Attendance</a>
-                            <a href="salary.html?employee_id=${emp.employee_id}" class="bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-2 rounded">Salary</a>
-                            <button data-action="edit" data-id="${emp.employee_id}" class="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded">Edit</button>
-                            <button data-action="delete" data-id="${emp.employee_id}" class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-2 rounded">Delete</button>
+                            <a href="attendance.html?employee_id=${emp.employee_id}" class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs font-bold py-1 px-2 rounded transition-all duration-200">Attendance</a>
+                            <a href="salary.html?employee_id=${emp.employee_id}" class="bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-1 px-2 rounded transition-all duration-200">Salary</a>
+                            <button data-action="edit" data-id="${emp.employee_id}" class="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded transition-all duration-200">Edit</button>
+                            <button data-action="delete" data-id="${emp.employee_id}" class="bg-red-500 hover:bg-red-600 text-white text-xs font-bold py-1 px-2 rounded transition-all duration-200">Delete</button>
                         </td>
                     `;
                     employeeTableBody.appendChild(row);
@@ -82,7 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             // Populate department filter
-            if (departmentFilter.options.length <= 1) { // Only populate once
+            if (departmentFilter.options.length <= 1) { 
                  data.departments.forEach(dep => {
                     const option = document.createElement('option');
                     option.value = dep;
@@ -91,7 +116,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
             
-            // Render Chart
             renderDepartmentChart(data.employees);
 
         } catch (error) {
@@ -123,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         if (departmentChart) {
-            departmentChart.destroy(); // Destroy old chart before creating a new one
+            departmentChart.destroy();
         }
 
         departmentChart = new Chart(departmentChartCanvas, {
@@ -142,13 +166,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- EVENT LISTENERS ---
-
-    // Add Employee
     addEmployeeForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = new FormData(addEmployeeForm);
         const newEmployee = Object.fromEntries(formData.entries());
-
         try {
             const response = await fetch(`${API_BASE_URL}/employees`, {
                 method: 'POST',
@@ -160,17 +181,20 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('Employee added successfully!');
             addEmployeeForm.reset();
             fetchEmployees();
+            fetchDashboardStats(); // Refresh stats after adding
         } catch (error) {
             showNotification('Error adding employee.', true);
             console.error('Add error:', error);
         }
     });
 
-    // Edit and Delete Buttons
+    // Event listener for Edit and Delete buttons
     employeeTableBody.addEventListener('click', async (e) => {
         const action = e.target.dataset.action;
         const id = e.target.dataset.id;
-        if (!action) return;
+        
+        // This listener only handles elements with a 'data-action'
+        if (!action) return; 
 
         if (action === 'delete') {
             employeeToDeleteId = id;
@@ -181,15 +205,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch(`${API_BASE_URL}/employees/${id}`, { credentials: 'include' });
                 if (!response.ok) throw new Error('Failed to fetch employee data');
                 const employee = await response.json();
-                
-                // Populate the edit form
                 editForm.elements['employee_id'].value = employee.employee_id;
                 editForm.elements['name'].value = employee.name;
                 editForm.elements['department'].value = employee.department;
                 editForm.elements['position'].value = employee.position;
                 editForm.elements['joining_date'].value = employee.joining_date.split(' ')[0];
                 editForm.elements['base_salary'].value = employee.base_salary;
-                
                 editModal.classList.remove('hidden');
             } catch (error) {
                 showNotification('Could not load employee data for editing.', true);
@@ -198,7 +219,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
     
-    // Edit Form Submission
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const id = e.target.elements['employee_id'].value;
@@ -209,7 +229,6 @@ document.addEventListener('DOMContentLoaded', () => {
             joining_date: e.target.elements['joining_date'].value,
             base_salary: e.target.elements['base_salary'].value
         };
-
         try {
             const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
                 method: 'PUT',
@@ -221,13 +240,13 @@ document.addEventListener('DOMContentLoaded', () => {
             editModal.classList.add('hidden');
             showNotification('Employee updated successfully!');
             fetchEmployees();
+            fetchDashboardStats(); // Refresh stats after editing
         } catch (error) {
             showNotification('Error updating employee.', true);
             console.error('Update error:', error);
         }
     });
 
-    // Confirmation Modal Logic
     confirmYesButton.addEventListener('click', async () => {
         if (employeeToDeleteId) {
             try {
@@ -238,6 +257,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!response.ok) throw new Error('Failed to delete employee');
                 showNotification('Employee deleted successfully.');
                 fetchEmployees();
+                fetchDashboardStats(); // Refresh stats after deleting
             } catch (error) {
                 showNotification('Error deleting employee.', true);
                 console.error('Delete error:', error);
@@ -253,23 +273,20 @@ document.addEventListener('DOMContentLoaded', () => {
         confirmModal.classList.add('hidden');
     });
 
-    // Modal Closing Buttons
     closeModalButton.addEventListener('click', () => editModal.classList.add('hidden'));
     cancelEditButton.addEventListener('click', () => editModal.classList.add('hidden'));
 
-    // Live Search and Filter
     let debounceTimer;
     searchInput.addEventListener('input', () => {
         clearTimeout(debounceTimer);
         debounceTimer = setTimeout(() => {
             fetchEmployees(searchInput.value, departmentFilter.value);
-        }, 300); // Debounce to avoid excessive API calls
+        }, 300);
     });
     departmentFilter.addEventListener('change', () => {
         fetchEmployees(searchInput.value, departmentFilter.value);
     });
 
-    // Logout Button
     const logoutButton = document.getElementById('logout-button');
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
@@ -279,8 +296,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- INITIAL LOAD ---
-    // The auth.js script runs first and validates the session.
-    // If the session is valid, then we can fetch the employees.
     fetchEmployees();
+    fetchDashboardStats(); // Fetch stats on initial load
 });
 
