@@ -127,4 +127,100 @@ FROM Employee e
 JOIN Salary s ON e.employee_id = s.employee_id;
 
 
+-- #######            all tables          #############
 select *from employee;
+select *from salary;
+select *from users;
+select *from attendance;
+
+
+
+
+-- First, change the delimiter so we can use semicolons inside the trigger
+DELIMITER $$
+
+-- Create the trigger which runs BEFORE a new row is INSERTED into the Salary table
+CREATE TRIGGER before_salary_insert
+BEFORE INSERT ON Salary FOR EACH ROW
+BEGIN
+    -- Declare a variable to hold the employee's base salary
+    DECLARE emp_base_salary FLOAT;
+
+    -- Get the base salary from the Employee table for the given employee_id
+    SELECT base_salary INTO emp_base_salary 
+    FROM Employee 
+    WHERE employee_id = NEW.employee_id;
+
+    -- Calculate and set the total_salary for the NEW row being inserted
+    SET NEW.total_salary = emp_base_salary + NEW.overtime_pay + NEW.bonus - NEW.deductions - NEW.pf_amount;
+END$$
+
+-- Change the delimiter back to the default
+DELIMITER ;
+
+
+
+-- new user table
+USE employee_salary_db;
+
+CREATE TABLE users (
+    id INT PRIMARY KEY AUTO_INCREMENT,	
+    username VARCHAR(50) NOT NULL UNIQUE,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+SELECT 'Users table created successfully' AS Status;
+
+select *from users;
+
+
+
+-- The "problem" is just a data issue. To successfully run payroll for October 2025, you need to do two things:
+DELETE FROM Salary WHERE month = '2025-10-01';
+
+
+
+
+USE employee_salary_db;
+
+-- 1. Add a 'role' column to your users table
+-- We'll default everyone to 'employee'
+ALTER TABLE users
+ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'employee';
+
+-- 2. Add a 'user_id' column to your Employee table
+-- This will link an employee record to a user login
+ALTER TABLE Employee
+ADD COLUMN user_id INT NULL UNIQUE,
+ADD CONSTRAINT fk_user_id
+    FOREIGN KEY (user_id) REFERENCES users(id)
+    ON DELETE SET NULL; -- If a user is deleted, the employee record is kept
+
+
+-- 3. [IMPORTANT] Make one of your users an 'admin'
+-- Replace 'vinush' with your actual admin username if it's different
+UPDATE users
+SET role = 'admin'
+WHERE username = 'vinush';
+
+-- 4. [OPTIONAL] Link an employee record to a user login
+-- Find the user ID of an employee user (e.g., 'bob')
+-- Find the employee ID of their record (e.g., Bob Johnson, ID 2)
+-- UPDATE Employee SET user_id = (SELECT id FROM users WHERE username = 'bob') WHERE employee_id = 2;
+-- You can do this for any employees you want to test the employee login with.
+
+SELECT 'Database updated successfully with roles.' AS Status;
+
+delete from users where username="jnaesh";
+
+
+
+
+select *from employee;
+select *from users;
+UPDATE Employee
+SET user_id = 4    -- The ID of the 'jnanesh' user account
+WHERE employee_id = 14; -- The ID of the 'jnanesh' employee record
+
+SELECT employee_id, name, user_id FROM Employee WHERE employee_id = 13;

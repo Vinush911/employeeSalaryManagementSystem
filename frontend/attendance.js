@@ -1,29 +1,10 @@
-// This ensures the page is protected and logic runs AFTER auth check
-document.addEventListener('DOMContentLoaded', () => {
-    // Check auth status first
-    // Use the full URL for the auth check, just in case
-    fetch('/api/check-auth', { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => {
-            if (!data.logged_in) {
-                // If not logged in, redirect to login page
-                window.location.href = 'login.html';
-            } else {
-                // If logged in, set username and run the page logic
-                const usernameDisplay = document.getElementById('username-display');
-                if(usernameDisplay) usernameDisplay.textContent = data.username;
-                runPageLogic(); // Run the main functions for this page
-            }
-        })
-        .catch(err => {
-            console.error('Auth check failed', err);
-            window.location.href = 'login.html';
-        });
-});
+// NO auth check or role check logic here. auth.js handles it.
 
-// Main function to encapsulate all page logic
+// --- Main function for the Attendance page (attendance.html) ---
 function runPageLogic() {
-    // Get all necessary elements from the page
+    console.log("attendance.js: runPageLogic() started."); // Add log
+
+    // --- ELEMENT SELECTORS ---
     const employeeNameHeader = document.getElementById('employee-name-header');
     const attendanceHistoryBody = document.getElementById('attendance-history-body');
     const addAttendanceForm = document.getElementById('add-attendance-form');
@@ -31,58 +12,105 @@ function runPageLogic() {
     const logoutButton = document.getElementById('logout-button');
 
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
-    
+
     // Get employee ID from the URL query parameter
     const urlParams = new URLSearchParams(window.location.search);
     const employeeId = urlParams.get('employee_id');
-    
+
     if (!employeeId) {
-        // If no ID is found, redirect back to the main dashboard
-        window.location.href = 'index.html'; 
-        return;
+        console.error("attendance.js: No employee_id found in URL. Redirecting."); // Add log
+        // Redirect if employee_id is missing
+        window.location.href = 'index.html';
+        return; // Stop further execution
     }
+     console.log(`attendance.js: Managing attendance for employee_id: ${employeeId}`); // Add log
+
 
     // --- HELPER FUNCTIONS ---
+    // Updated formatMonthYear to handle potential errors
     const formatMonthYear = (dateString) => {
         if (!dateString) return 'Invalid Date';
-        // Add 'T00:00:00' to ensure the date is parsed in local time, not UTC
-        const date = new Date(dateString + 'T00:00:00'); 
-        return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        try {
+            // Add 'T00:00:00' to hint local time interpretation
+            const date = new Date(dateString + 'T00:00:00');
+            // Check if the date is valid before formatting
+            if (isNaN(date.getTime())) return 'Invalid Date';
+            return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        } catch (e) {
+            console.error("Error formatting date:", dateString, e);
+            return 'Invalid Date';
+        }
     };
 
-    // --- DATA FETCHING ---
-    // Fetches the employee's name to display in the header
+
+    // --- DATA FETCHING & RENDERING ---
     async function fetchEmployeeDetails() {
+         console.log("attendance.js: fetchEmployeeDetails() called."); // Add log
+         if (!employeeNameHeader) {
+            console.error("Employee name header element not found!");
+            return;
+         }
+         employeeNameHeader.textContent = 'Loading employee details...'; // Set loading state
         try {
             const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, { credentials: 'include' });
-            if (!response.ok) throw new Error('Failed to fetch employee details');
+            if (!response.ok) {
+                 if(response.status === 401) {
+                    console.error("fetchEmployeeDetails: Unauthorized (401). Should have been redirected by auth.js.");
+                    // window.location.href = 'login.html'; // Fallback redirect
+                    return; // Stop execution
+                }
+                 // Try to get error message from backend
+                let errorMsg = `Failed to fetch employee details (${response.status})`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch(e) { /* Ignore if response isn't JSON */ }
+                throw new Error(errorMsg);
+            }
             const employee = await response.json();
-            employeeNameHeader.textContent = `Attendance for ${employee.name}`;
+             console.log("attendance.js: Employee details received:", employee); // Add log
+            employeeNameHeader.textContent = `Attendance for ${employee.name ?? 'Unknown Employee'}`;
         } catch (error) {
             console.error('Error fetching employee details:', error);
             employeeNameHeader.textContent = 'Error loading employee data';
         }
     }
 
-    // Fetches all past attendance records for this employee
     async function fetchAttendanceHistory() {
+        console.log("attendance.js: fetchAttendanceHistory() called."); // Add log
+        if (!attendanceHistoryBody) {
+             console.error("Attendance history table body not found!");
+             return;
+        }
+        attendanceHistoryBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Loading attendance history...</td></tr>`; // Show loading state
+
         try {
             const response = await fetch(`${API_BASE_URL}/employees/${employeeId}/attendance`, { credentials: 'include' });
-            if (!response.ok) throw new Error('Failed to fetch attendance history');
+            if (!response.ok) {
+                 if(response.status === 401) return; // Handled by auth.js
+                 // Try to get error message from backend
+                let errorMsg = `Failed to fetch attendance history (${response.status})`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch(e) { /* Ignore if response isn't JSON */ }
+                throw new Error(errorMsg);
+            }
             const attendance = await response.json();
-            
-            attendanceHistoryBody.innerHTML = ''; // Clear existing rows
-            if (attendance.length === 0) {
-                attendanceHistoryBody.innerHTML = `<tr><td colspan="4" class="text-center py-4">No attendance records found.</td></tr>`;
+            console.log("attendance.js: Attendance history received:", attendance); // Add log
+
+            attendanceHistoryBody.innerHTML = ''; // Clear loading message
+            if (!attendance || attendance.length === 0) {
+                attendanceHistoryBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">No attendance records found.</td></tr>`;
             } else {
-                // Populate the table with attendance records
                 attendance.forEach(record => {
                     const row = document.createElement('tr');
+                    // Add null checks for safety
                     row.innerHTML = `
                         <td class="py-2 px-4 border-b">${formatMonthYear(record.month)}</td>
-                        <td class="py-2 px-4 border-b text-center">${record.days_present}</td>
-                        <td class="py-2 px-4 border-b text-center">${record.leaves_taken}</td>
-                        <td class="py-2 px-4 border-b text-right">${record.overtime_hours.toFixed(1)}</td>
+                        <td class="py-2 px-4 border-b text-center">${record.days_present ?? 0}</td>
+                        <td class="py-2 px-4 border-b text-center">${record.leaves_taken ?? 0}</td>
+                        <td class="py-2 px-4 border-b text-right">${(record.overtime_hours ?? 0).toFixed(1)}</td>
                     `;
                     attendanceHistoryBody.appendChild(row);
                 });
@@ -94,64 +122,100 @@ function runPageLogic() {
     }
 
     // --- EVENT LISTENERS ---
-    
-    // Add event listener for the new attendance form
     if (addAttendanceForm) {
         addAttendanceForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); // Stop the default form submission (page reload)
-            
+            e.preventDefault();
+             console.log("attendance.js: Add attendance form submitted."); // Add log
+
+            // Ensure message element exists
+            if (!attendanceFormMessage) {
+                console.error("Attendance form message element not found!");
+                return;
+            }
+
             const formData = new FormData(addAttendanceForm);
-            // Construct the data object to send to the backend
             const attendanceData = {
                 employee_id: employeeId,
-                month: formData.get('month') + '-01', // Append '-01' to make it a valid date
+                month: formData.get('month') + '-01', // Append day for backend
                 days_present: formData.get('days_present'),
                 leaves_taken: formData.get('leaves_taken'),
                 overtime_hours: formData.get('overtime_hours')
             };
+            console.log("attendance.js: Sending attendance data:", attendanceData); // Add log
 
-            // Clear any previous messages
-            attendanceFormMessage.textContent = '';
+
+            attendanceFormMessage.textContent = 'Adding record...'; // Indicate processing
             attendanceFormMessage.classList.remove('text-red-600', 'text-green-600');
+            attendanceFormMessage.classList.add('text-gray-600'); // Use neutral color for processing
 
             try {
-                // Send the data to the backend
                 const response = await fetch(`${API_BASE_URL}/attendance`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(attendanceData),
-                    credentials: 'include' // Send cookies
+                    credentials: 'include'
                 });
-                const data = await response.json();
+
+                 // Try parsing JSON even for errors
+                 let data;
+                 try {
+                     data = await response.json();
+                     console.log("attendance.js: Add attendance response data:", data); // Add log
+                 } catch (jsonError) {
+                     console.error("attendance.js: Failed to parse JSON response:", jsonError);
+                     throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
+                 }
+
+
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to add attendance');
+                    throw new Error(data.error || `Failed to add attendance (Status: ${response.status})`);
                 }
-                
-                // Show success message and refresh the list
+
                 attendanceFormMessage.textContent = 'Record added successfully!';
+                attendanceFormMessage.classList.remove('text-red-600', 'text-gray-600');
                 attendanceFormMessage.classList.add('text-green-600');
-                addAttendanceForm.reset();
+                addAttendanceForm.reset(); // Clear form on success
                 fetchAttendanceHistory(); // Refresh the list
-                
+
             } catch (error) {
                 console.error('Error adding attendance:', error);
-                attendanceFormMessage.textContent = error.message;
+                attendanceFormMessage.textContent = `Error: ${error.message}`;
+                attendanceFormMessage.classList.remove('text-green-600', 'text-gray-600');
                 attendanceFormMessage.classList.add('text-red-600');
             }
         });
+    } else {
+         console.warn("attendance.js: Add attendance form not found."); // Add log
     }
 
-    // Add event listener for the logout button
+    // Logout Button
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
-            await fetch(`${API_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
-            window.location.href = 'login.html';
+             console.log("attendance.js: Logout button clicked."); // Add log
+             logoutButton.textContent = 'Logging out...';
+             logoutButton.disabled = true;
+            try {
+                 await fetch(`${API_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
+                 window.location.href = 'login.html';
+            } catch (logoutError) {
+                 console.error("Logout failed:", logoutError);
+                 alert("Logout failed. Please try again or close the tab.");
+                 logoutButton.textContent = 'Logout';
+                 logoutButton.disabled = false;
+            }
         });
+    } else {
+        console.warn("attendance.js: Logout button not found."); // Add log
     }
 
-    // --- INITIAL LOAD ---
-    // Fetch all necessary data when the page loads
+    // --- INITIAL DATA LOAD ---
+    console.log("attendance.js: Calling initial fetch functions inside runPageLogic."); // Add log
     fetchEmployeeDetails();
     fetchAttendanceHistory();
-}
+
+} // --- End of runPageLogic ---
+
+
+// --- Add the event listener at the VERY END to call runPageLogic ---
+document.addEventListener('DOMContentLoaded', runPageLogic);
 

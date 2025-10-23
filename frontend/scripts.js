@@ -1,15 +1,24 @@
-document.addEventListener('DOMContentLoaded', () => {
+// NO auth check or role check logic here. auth.js handles it.
+
+// --- Main function for the Admin Dashboard (index.html) ---
+function runPageLogic() {
+    console.log("scripts.js: runPageLogic() started."); // Add log
+
     // --- ELEMENT SELECTORS ---
     const employeeTableBody = document.getElementById('employee-table-body');
     const addEmployeeForm = document.getElementById('add-employee-form');
     const searchInput = document.getElementById('search-input');
     const departmentFilter = document.getElementById('department-filter');
     const departmentChartCanvas = document.getElementById('department-chart');
-    
+
     // Stat Card Selectors
     const totalEmployeesEl = document.getElementById('total-employees');
     const totalDepartmentsEl = document.getElementById('total-departments');
     const averageSalaryEl = document.getElementById('average-salary');
+
+    // Spinner and Table Container
+    const tableSpinner = document.getElementById('table-spinner');
+    const tableContainer = document.getElementById('table-container');
 
     // Edit Modal Elements
     const editModal = document.getElementById('edit-modal');
@@ -25,74 +34,141 @@ document.addEventListener('DOMContentLoaded', () => {
     const confirmYesButton = document.getElementById('confirm-yes');
     const confirmNoButton = document.getElementById('confirm-no');
 
+    // Logout Button
+    const logoutButton = document.getElementById('logout-button');
+
+    // --- FIX: Add selector for the username display in the header ---
+    const usernameDisplay = document.getElementById('username-display');
+
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
-    let departmentChart = null; 
+    let departmentChart = null;
     let employeeToDeleteId = null;
 
+    // --- FIX: Function to set username ---
+    async function setUsername() {
+        if (!usernameDisplay) {
+            console.warn("scripts.js: Username display element not found in header.");
+            return;
+        }
+        try {
+            // Fetch auth details again to get username reliably
+            const response = await fetch(`${API_BASE_URL}/check-auth`, { credentials: 'include' });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.logged_in && data.username) {
+                    usernameDisplay.textContent = data.username;
+                    console.log("scripts.js: Username set in header:", data.username);
+                } else {
+                     usernameDisplay.textContent = 'Admin'; // Fallback for admin page
+                }
+            } else {
+                 usernameDisplay.textContent = 'Error'; // Indicate auth check failed
+            }
+        } catch (error) {
+            console.error("scripts.js: Error fetching username for header:", error);
+            usernameDisplay.textContent = 'Error';
+        }
+    }
+
     // --- HELPER FUNCTIONS ---
-    const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
-    const formatDate = (dateString) => dateString ? new Date(dateString.split(' ')[0]).toLocaleDateString('en-GB') : 'N/A';
+    const formatCurrency = (amount) => amount != null ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount) : 'N/A';
+    const formatDate = (dateString) => dateString ? new Date(dateString.split(' ')[0]).toLocaleDateString('en-GB') : 'N/A'; // Simple DD/MM/YYYY
 
     const showNotification = (message, isError = false) => {
-        notificationMessage.textContent = message;
-        notificationToast.classList.remove('hidden');
-        if (isError) {
-            notificationToast.classList.add('bg-red-500');
-            notificationToast.classList.remove('bg-green-500');
-        } else {
-            notificationToast.classList.add('bg-green-500');
-            notificationToast.classList.remove('bg-red-500');
+        if (!notificationToast || !notificationMessage) {
+            console.error("Notification elements not found!");
+            alert(message); // Fallback to alert
+            return;
         }
+        notificationMessage.textContent = message;
+        notificationToast.classList.remove('hidden', 'bg-red-500', 'bg-green-500'); // Reset classes
+        notificationToast.classList.add(isError ? 'bg-red-500' : 'bg-green-500');
+
+        // Simple fade in/out (optional)
+        notificationToast.style.opacity = 1;
         setTimeout(() => {
-            notificationToast.classList.add('hidden');
-        }, 3000);
+            notificationToast.style.opacity = 0;
+            // Use transition end or another timeout to hide completely
+            setTimeout(() => notificationToast.classList.add('hidden'), 500); // Hide after fade
+        }, 3000); // Show for 3 seconds
     };
+
 
     // --- DATA FETCHING & RENDERING ---
     async function fetchDashboardStats() {
+        console.log("scripts.js: fetchDashboardStats() called."); // Add log
+        // Set loading state
+        if(totalEmployeesEl) totalEmployeesEl.textContent = '...';
+        if(totalDepartmentsEl) totalDepartmentsEl.textContent = '...';
+        if(averageSalaryEl) averageSalaryEl.textContent = '...';
+
         try {
             const response = await fetch(`${API_BASE_URL}/dashboard-stats`, { credentials: 'include' });
-            if (!response.ok) throw new Error('Failed to fetch stats');
+            if (!response.ok) {
+                if(response.status === 401 || response.status === 403) return; // Handled by auth.js
+                 let errorMsg = `Failed to fetch stats (${response.status})`;
+                 try {
+                     const errorData = await response.json();
+                     errorMsg = errorData.error || errorMsg;
+                 } catch(e) { /* Ignore */ }
+                throw new Error(errorMsg);
+            }
             const stats = await response.json();
+             console.log("scripts.js: Dashboard stats received:", stats); // Add log
 
-            totalEmployeesEl.textContent = stats.total_employees;
-            totalDepartmentsEl.textContent = stats.total_departments;
-            averageSalaryEl.textContent = formatCurrency(stats.average_salary);
+            if(totalEmployeesEl) totalEmployeesEl.textContent = stats.total_employees ?? 'N/A';
+            if(totalDepartmentsEl) totalDepartmentsEl.textContent = stats.total_departments ?? 'N/A';
+            if(averageSalaryEl) averageSalaryEl.textContent = formatCurrency(stats.average_salary);
+
         } catch (error) {
             console.error('Error fetching dashboard stats:', error);
-            totalEmployeesEl.textContent = 'N/A';
-            totalDepartmentsEl.textContent = 'N/A';
-            averageSalaryEl.textContent = 'N/A';
+            if(totalEmployeesEl) totalEmployeesEl.textContent = 'N/A';
+            if(totalDepartmentsEl) totalDepartmentsEl.textContent = 'N/A';
+            if(averageSalaryEl) averageSalaryEl.textContent = 'N/A';
+            showNotification(`Error loading stats: ${error.message}`, true); // Show error to user
         }
     }
 
     async function fetchEmployees(searchTerm = '', department = '') {
+         console.log(`scripts.js: fetchEmployees called with search: "${searchTerm}", department: "${department}"`); // Add log
+         if (!employeeTableBody || !tableSpinner || !tableContainer || !departmentFilter) {
+             console.error("Employee list or related elements not found!");
+             return;
+         }
+
+        // --- SPINNER LOGIC (START) ---
+        tableSpinner.classList.remove('hidden');
+        tableContainer.classList.add('hidden');
+        employeeTableBody.innerHTML = ''; // Clear previous results immediately
+
         try {
-            const response = await fetch(`${API_BASE_URL}/employees?search=${searchTerm}&department=${department}`, {
-                credentials: 'include' 
+            const response = await fetch(`${API_BASE_URL}/employees?search=${encodeURIComponent(searchTerm)}&department=${encodeURIComponent(department)}`, {
+                credentials: 'include'
             });
             if (!response.ok) {
-                if(response.status === 401) return; 
-                throw new Error('Failed to fetch data');
+                if(response.status === 401 || response.status === 403) return; // Handled by auth.js
+                 let errorMsg = `Failed to fetch employees (${response.status})`;
+                 try {
+                     const errorData = await response.json();
+                     errorMsg = errorData.error || errorMsg;
+                 } catch(e) { /* Ignore */ }
+                throw new Error(errorMsg);
             }
             const data = await response.json();
+            console.log("scripts.js: Employee data received:", data); // Add log
 
             // Populate table
-            employeeTableBody.innerHTML = ''; 
-            if (data.employees.length === 0) {
-                employeeTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4">No employees found.</td></tr>`;
+            if (!data.employees || data.employees.length === 0) {
+                employeeTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">No employees found matching criteria.</td></tr>`;
             } else {
                 data.employees.forEach(emp => {
                     const row = document.createElement('tr');
-                    
-                    // --- THIS IS THE FIX ---
-                    // Ensure Salary and Attendance are <a> tags (links) 
-                    // and Edit/Delete are <button> tags with data-action.
+                    // Add null checks for safety
                     row.innerHTML = `
-                        <td class="py-2 px-4 border-b">${emp.employee_id}</td>
-                        <td class="py-2 px-4 border-b">${emp.name}</td>
-                        <td class="py-2 px-4 border-b">${emp.department}</td>
-                        <td class="py-2 px-4 border-b">${emp.position}</td>
+                        <td class="py-2 px-4 border-b">${emp.employee_id ?? 'N/A'}</td>
+                        <td class="py-2 px-4 border-b">${emp.name ?? 'N/A'}</td>
+                        <td class="py-2 px-4 border-b">${emp.department ?? 'N/A'}</td>
+                        <td class="py-2 px-4 border-b">${emp.position ?? 'N/A'}</td>
                         <td class="py-2 px-4 border-b">${formatDate(emp.joining_date)}</td>
                         <td class="py-2 px-4 border-b text-right">${formatCurrency(emp.base_salary)}</td>
                         <td class="py-2 px-4 border-b text-center space-x-1">
@@ -105,198 +181,430 @@ document.addEventListener('DOMContentLoaded', () => {
                     employeeTableBody.appendChild(row);
                 });
             }
-            
-            // Populate department filter
-            if (departmentFilter.options.length <= 1) { 
+
+            // Populate department filter (only if needed and departments exist)
+            if (departmentFilter.options.length <= 1 && data.departments && data.departments.length > 0) {
+                 console.log("scripts.js: Populating department filter."); // Add log
                  data.departments.forEach(dep => {
-                    const option = document.createElement('option');
-                    option.value = dep;
-                    option.textContent = dep;
-                    departmentFilter.appendChild(option);
+                     if (dep) { // Avoid adding null/empty departments
+                        const option = document.createElement('option');
+                        option.value = dep;
+                        option.textContent = dep;
+                        departmentFilter.appendChild(option);
+                     }
                 });
             }
-            
-            renderDepartmentChart(data.employees);
+
+            // Render the department distribution chart
+            renderDepartmentChart(data.employees || []); // Pass empty array if no employees
 
         } catch (error) {
-            showNotification('Failed to load data. Is the backend running?', true);
-            console.error('Fetch error:', error);
+            console.error('Fetch employees error:', error);
+            showNotification(`Failed to load employee data: ${error.message}`, true);
+            employeeTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error loading employees.</td></tr>`; // Show error in table
+             renderDepartmentChart([]); // Render empty chart on error
+        } finally {
+            // --- SPINNER LOGIC (END) ---
+            tableSpinner.classList.add('hidden');
+            tableContainer.classList.remove('hidden');
         }
     }
 
     // --- CHART RENDERING ---
     function renderDepartmentChart(employees) {
-        const departmentCounts = employees.reduce((acc, emp) => {
-            acc[emp.department] = (acc[emp.department] || 0) + 1;
+        console.log("scripts.js: renderDepartmentChart called."); // Add log
+        if (!departmentChartCanvas) {
+             console.error("Department chart canvas not found!");
+             return;
+        }
+
+        // Calculate employee count per department
+        const departmentCounts = (employees || []).reduce((acc, emp) => {
+             const dept = emp.department || 'Unknown'; // Group null/empty departments
+            acc[dept] = (acc[dept] || 0) + 1;
             return acc;
         }, {});
 
+        // Prepare data for Chart.js
         const chartData = {
             labels: Object.keys(departmentCounts),
             datasets: [{
                 label: 'Employees per Department',
                 data: Object.values(departmentCounts),
-                backgroundColor: [
-                    'rgba(54, 162, 235, 0.6)',
-                    'rgba(255, 99, 132, 0.6)',
-                    'rgba(75, 192, 192, 0.6)',
-                    'rgba(255, 206, 86, 0.6)',
-                    'rgba(153, 102, 255, 0.6)'
-                ]
+                backgroundColor: [ // Add more colors if needed
+                    'rgba(54, 162, 235, 0.7)', // Blue
+                    'rgba(255, 99, 132, 0.7)',  // Red
+                    'rgba(75, 192, 192, 0.7)',  // Green
+                    'rgba(255, 206, 86, 0.7)',  // Yellow
+                    'rgba(153, 102, 255, 0.7)', // Purple
+                    'rgba(255, 159, 64, 0.7)'   // Orange
+                ],
+                 borderColor: '#fff', // Add white border for separation
+                 borderWidth: 1
             }]
         };
 
+        // Destroy previous chart instance if it exists
         if (departmentChart) {
             departmentChart.destroy();
+            departmentChart = null; // Ensure it's reset
         }
 
-        departmentChart = new Chart(departmentChartCanvas, {
-            type: 'pie',
-            data: chartData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'top',
+        // Only create chart if there's data
+         if (Object.keys(departmentCounts).length > 0) {
+            try {
+                departmentChart = new Chart(departmentChartCanvas, {
+                    type: 'pie', // Or 'doughnut'
+                    data: chartData,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false, // Allows chart to fit container height
+                        plugins: {
+                            legend: {
+                                position: 'top', // Position the legend at the top
+                                labels: {
+                                    padding: 15 // Add padding to legend items
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                     // Show count in tooltip
+                                     label: (context) => `${context.label}: ${context.raw}`
+                                }
+                            }
+                        },
+                         layout: {
+                             padding: 5 // Add small padding around chart
+                         }
                     }
+                });
+                 console.log("scripts.js: Department chart rendered."); // Add log
+            } catch (chartError) {
+                 console.error("scripts.js: Error rendering department chart:", chartError);
+                 // Optionally display an error message on the canvas container
+                 departmentChartCanvas.parentElement.innerHTML = '<p class="text-red-500 text-center">Could not display chart.</p>';
+            }
+         } else {
+             console.log("scripts.js: No department data to render chart."); // Add log
+              // Optionally display a "No data" message
+              departmentChartCanvas.parentElement.innerHTML = '<p class="text-gray-500 text-center">No department data available.</p>';
+         }
+    }
+
+
+    // --- EVENT LISTENERS ---
+
+    // Add Employee Form Submission
+    if (addEmployeeForm) {
+        addEmployeeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log("scripts.js: Add employee form submitted."); // Add log
+            const formData = new FormData(addEmployeeForm);
+            const newEmployee = Object.fromEntries(formData.entries());
+
+            // Simple validation (can be more robust)
+            if (!newEmployee.name || !newEmployee.department || !newEmployee.position || !newEmployee.joining_date || !newEmployee.base_salary) {
+                showNotification("Please fill in all employee fields.", true);
+                return;
+            }
+
+             const submitButton = addEmployeeForm.querySelector('button[type="submit"]');
+             if(submitButton) submitButton.disabled = true; // Disable button during submission
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/employees`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(newEmployee),
+                    credentials: 'include'
+                });
+                 // Try parsing JSON even for errors
+                 let data;
+                 try {
+                     data = await response.json();
+                     console.log("scripts.js: Add employee response:", data); // Add log
+                 } catch (jsonError) {
+                     throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
+                 }
+
+                if (!response.ok) {
+                    throw new Error(data.error || `Failed to add employee (Status: ${response.status})`);
+                }
+                showNotification('Employee added successfully!');
+                addEmployeeForm.reset();
+                fetchEmployees(); // Refresh list and chart
+                fetchDashboardStats(); // Refresh stats
+
+            } catch (error) {
+                console.error('Add employee error:', error);
+                showNotification(`Error adding employee: ${error.message}`, true);
+            } finally {
+                 if(submitButton) submitButton.disabled = false; // Re-enable button
+            }
+        });
+    } else {
+         console.warn("scripts.js: Add employee form not found."); // Add log
+    }
+
+
+    // Event Delegation for Edit and Delete buttons
+    if (employeeTableBody) {
+        employeeTableBody.addEventListener('click', async (e) => {
+            // Target the button itself, even if icon inside is clicked
+            const button = e.target.closest('button[data-action]');
+            if (!button) return; // Exit if click wasn't on an action button
+
+            const action = button.dataset.action;
+            const id = button.dataset.id;
+            console.log(`scripts.js: Action "${action}" clicked for employee ID ${id}`); // Add log
+
+
+            if (action === 'delete') {
+                 if (!confirmModal || !confirmMessage || !confirmYesButton || !confirmNoButton) {
+                     console.error("Confirmation modal elements not found!");
+                     if(confirm("Are you sure you want to delete this employee? (Modal failed)")) { // Fallback confirm
+                         // Proceed with deletion logic directly if modal fails - NOT IDEAL
+                         await proceedWithDelete(id);
+                     }
+                     return;
+                 }
+                employeeToDeleteId = id;
+                confirmMessage.textContent = `Are you sure you want to delete employee ID ${id}? This action cannot be undone.`;
+                confirmModal.classList.remove('hidden');
+            }
+            else if (action === 'edit') {
+                 if (!editModal || !editForm) {
+                     console.error("Edit modal elements not found!");
+                     alert("Cannot open edit form. Please refresh.");
+                     return;
+                 }
+                try {
+                     button.textContent = 'Loading...'; // Indicate loading
+                     button.disabled = true;
+                    const response = await fetch(`${API_BASE_URL}/employees/${id}`, { credentials: 'include' });
+                    if (!response.ok) {
+                         if(response.status === 401 || response.status === 403) return; // Auth handled
+                         let errorMsg = `Failed to load employee data (${response.status})`;
+                         try {
+                             const errorData = await response.json();
+                             errorMsg = errorData.error || errorMsg;
+                         } catch(e) { /* Ignore */ }
+                        throw new Error(errorMsg);
+                    }
+                    const employee = await response.json();
+                    console.log("scripts.js: Editing employee:", employee); // Add log
+
+                    // Fill the edit form fields safely
+                    editForm.elements['employee_id'].value = employee.employee_id ?? '';
+                    editForm.elements['name'].value = employee.name ?? '';
+                    editForm.elements['department'].value = employee.department ?? '';
+                    editForm.elements['position'].value = employee.position ?? '';
+                    // Ensure date format is YYYY-MM-DD
+                    editForm.elements['joining_date'].value = (employee.joining_date ? employee.joining_date.split(' ')[0] : '');
+                    editForm.elements['base_salary'].value = employee.base_salary ?? '';
+
+                    editModal.classList.remove('hidden');
+
+                } catch (error) {
+                    console.error('Edit load error:', error);
+                    showNotification(`Could not load employee data for editing: ${error.message}`, true);
+                } finally {
+                     button.textContent = 'Edit'; // Restore button text
+                     button.disabled = false;
                 }
             }
         });
+    } else {
+         console.warn("scripts.js: Employee table body not found for event delegation."); // Add log
     }
 
-    // --- EVENT LISTENERS ---
-    addEmployeeForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = new FormData(addEmployeeForm);
-        const newEmployee = Object.fromEntries(formData.entries());
-        try {
-            const response = await fetch(`${API_BASE_URL}/employees`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newEmployee),
-                credentials: 'include'
-            });
-            if (!response.ok) throw new Error('Failed to add employee');
-            showNotification('Employee added successfully!');
-            addEmployeeForm.reset();
-            fetchEmployees();
-            fetchDashboardStats(); // Refresh stats after adding
-        } catch (error) {
-            showNotification('Error adding employee.', true);
-            console.error('Add error:', error);
-        }
-    });
+    // Function to handle deletion after confirmation
+     async function proceedWithDelete(id) {
+         if (!id) return;
+         console.log(`scripts.js: Proceeding with delete for employee ID ${id}`); // Add log
+         try {
+             const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+                 method: 'DELETE',
+                 credentials: 'include'
+             });
+              // Try parsing JSON even for errors
+             let data;
+             try {
+                 data = await response.json();
+                 console.log("scripts.js: Delete response:", data); // Add log
+             } catch (jsonError) {
+                  throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
+             }
 
-    // Event listener for Edit and Delete buttons
-    employeeTableBody.addEventListener('click', async (e) => {
-        const action = e.target.dataset.action;
-        const id = e.target.dataset.id;
-        
-        // This listener only handles elements with a 'data-action'
-        if (!action) return; 
+             if (!response.ok) {
+                 throw new Error(data.error || `Failed to delete employee (Status: ${response.status})`);
+             }
+             showNotification('Employee deleted successfully.');
+             fetchEmployees(searchInput.value, departmentFilter.value); // Refresh list/chart
+             fetchDashboardStats(); // Refresh stats
+         } catch (error) {
+             console.error('Delete error:', error);
+             showNotification(`Error deleting employee: ${error.message}`, true);
+         } finally {
+             // Reset state and hide modal (ensure modal elements exist)
+             employeeToDeleteId = null;
+             if (confirmModal) confirmModal.classList.add('hidden');
+         }
+     }
 
-        if (action === 'delete') {
-            employeeToDeleteId = id;
-            confirmMessage.textContent = `Are you sure you want to delete this employee? This action cannot be undone.`;
-            confirmModal.classList.remove('hidden');
-        } else if (action === 'edit') {
-            try {
-                const response = await fetch(`${API_BASE_URL}/employees/${id}`, { credentials: 'include' });
-                if (!response.ok) throw new Error('Failed to fetch employee data');
-                const employee = await response.json();
-                editForm.elements['employee_id'].value = employee.employee_id;
-                editForm.elements['name'].value = employee.name;
-                editForm.elements['department'].value = employee.department;
-                editForm.elements['position'].value = employee.position;
-                editForm.elements['joining_date'].value = employee.joining_date.split(' ')[0];
-                editForm.elements['base_salary'].value = employee.base_salary;
-                editModal.classList.remove('hidden');
-            } catch (error) {
-                showNotification('Could not load employee data for editing.', true);
-                console.error('Edit load error:', error);
+
+    // Edit Form Submission
+    if (editForm) {
+        editForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = e.target.elements['employee_id'].value;
+             console.log(`scripts.js: Edit form submitted for employee ID ${id}`); // Add log
+
+            const updatedData = {
+                name: e.target.elements['name'].value,
+                department: e.target.elements['department'].value,
+                position: e.target.elements['position'].value,
+                joining_date: e.target.elements['joining_date'].value,
+                base_salary: e.target.elements['base_salary'].value
+                // Include user_id if you add a field for it in the modal
+            };
+
+            // Simple validation
+             if (!updatedData.name || !updatedData.department || !updatedData.position || !updatedData.joining_date || !updatedData.base_salary) {
+                showNotification("Please fill in all employee fields.", true);
+                return;
             }
-        }
-    });
-    
-    editForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = e.target.elements['employee_id'].value;
-        const updatedData = {
-            name: e.target.elements['name'].value,
-            department: e.target.elements['department'].value,
-            position: e.target.elements['position'].value,
-            joining_date: e.target.elements['joining_date'].value,
-            base_salary: e.target.elements['base_salary'].value
-        };
-        try {
-            const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(updatedData),
-                credentials: 'include'
-            });
-            if (!response.ok) throw new Error('Failed to update employee');
-            editModal.classList.add('hidden');
-            showNotification('Employee updated successfully!');
-            fetchEmployees();
-            fetchDashboardStats(); // Refresh stats after editing
-        } catch (error) {
-            showNotification('Error updating employee.', true);
-            console.error('Update error:', error);
-        }
-    });
 
-    confirmYesButton.addEventListener('click', async () => {
-        if (employeeToDeleteId) {
+             const saveButton = editForm.querySelector('button[type="submit"]');
+             if(saveButton) saveButton.disabled = true; // Disable button
+
             try {
-                const response = await fetch(`${API_BASE_URL}/employees/${employeeToDeleteId}`, {
-                    method: 'DELETE',
+                const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(updatedData),
                     credentials: 'include'
                 });
-                if (!response.ok) throw new Error('Failed to delete employee');
-                showNotification('Employee deleted successfully.');
-                fetchEmployees();
-                fetchDashboardStats(); // Refresh stats after deleting
+                // Try parsing JSON even for errors
+                 let data;
+                 try {
+                     data = await response.json();
+                      console.log("scripts.js: Edit response:", data); // Add log
+                 } catch (jsonError) {
+                     throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
+                 }
+
+                if (!response.ok) {
+                    throw new Error(data.error || `Failed to update employee (Status: ${response.status})`);
+                }
+                if (editModal) editModal.classList.add('hidden'); // Hide modal on success
+                showNotification(data.message || 'Employee updated successfully!'); // Use message from backend if available
+                fetchEmployees(searchInput.value, departmentFilter.value); // Refresh list/chart
+                fetchDashboardStats(); // Refresh stats
             } catch (error) {
-                showNotification('Error deleting employee.', true);
-                console.error('Delete error:', error);
+                 console.error('Update error:', error);
+                 showNotification(`Error updating employee: ${error.message}`, true);
             } finally {
-                employeeToDeleteId = null;
-                confirmModal.classList.add('hidden');
+                 if(saveButton) saveButton.disabled = false; // Re-enable button
             }
-        }
-    });
-
-    confirmNoButton.addEventListener('click', () => {
-        employeeToDeleteId = null;
-        confirmModal.classList.add('hidden');
-    });
-
-    closeModalButton.addEventListener('click', () => editModal.classList.add('hidden'));
-    cancelEditButton.addEventListener('click', () => editModal.classList.add('hidden'));
-
-    let debounceTimer;
-    searchInput.addEventListener('input', () => {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            fetchEmployees(searchInput.value, departmentFilter.value);
-        }, 300);
-    });
-    departmentFilter.addEventListener('change', () => {
-        fetchEmployees(searchInput.value, departmentFilter.value);
-    });
-
-    const logoutButton = document.getElementById('logout-button');
-    if (logoutButton) {
-        logoutButton.addEventListener('click', async () => {
-            await fetch(`${API_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
-            window.location.href = 'login.html';
         });
+    } else {
+         console.warn("scripts.js: Edit form not found."); // Add log
     }
 
-    // --- INITIAL LOAD ---
+
+    // Confirmation Modal Buttons
+    if (confirmYesButton) {
+        confirmYesButton.addEventListener('click', () => proceedWithDelete(employeeToDeleteId));
+    } else {
+         console.warn("scripts.js: Confirm Yes button not found."); // Add log
+    }
+
+    if (confirmNoButton) {
+        confirmNoButton.addEventListener('click', () => {
+             console.log("scripts.js: Delete cancelled."); // Add log
+             employeeToDeleteId = null;
+            if (confirmModal) confirmModal.classList.add('hidden');
+        });
+    } else {
+        console.warn("scripts.js: Confirm No button not found."); // Add log
+    }
+
+
+    // Modal Closing Buttons
+    if (closeModalButton) {
+        closeModalButton.addEventListener('click', () => {
+             if (editModal) editModal.classList.add('hidden');
+        });
+    } else {
+         console.warn("scripts.js: Close Modal button not found."); // Add log
+    }
+
+    if (cancelEditButton) {
+        cancelEditButton.addEventListener('click', () => {
+             if (editModal) editModal.classList.add('hidden');
+        });
+    } else {
+         console.warn("scripts.js: Cancel Edit button not found."); // Add log
+    }
+
+
+    // Live Search Input (with Debounce)
+    let debounceTimer;
+    if (searchInput) {
+        searchInput.addEventListener('input', () => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                 console.log("scripts.js: Search input changed, fetching..."); // Add log
+                 fetchEmployees(searchInput.value, departmentFilter.value);
+            }, 300); // 300ms delay
+        });
+    } else {
+         console.warn("scripts.js: Search input not found."); // Add log
+    }
+
+
+    // Department Filter Dropdown
+    if (departmentFilter) {
+        departmentFilter.addEventListener('change', () => {
+             console.log("scripts.js: Department filter changed, fetching..."); // Add log
+             fetchEmployees(searchInput.value, departmentFilter.value);
+        });
+    } else {
+         console.warn("scripts.js: Department filter not found."); // Add log
+    }
+
+
+    // Logout Button
+    if (logoutButton) {
+        logoutButton.addEventListener('click', async () => {
+            console.log("scripts.js: Logout button clicked."); // Add log
+            logoutButton.textContent = 'Logging out...';
+            logoutButton.disabled = true;
+            try {
+                await fetch(`${API_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
+                window.location.href = 'login.html';
+            } catch (logoutError) {
+                 console.error("Logout failed:", logoutError);
+                 alert("Logout failed. Please try again or close the tab.");
+                 logoutButton.textContent = 'Logout';
+                 logoutButton.disabled = false;
+            }
+        });
+    } else {
+         console.warn("scripts.js: Logout button not found."); // Add log
+    }
+
+    // --- INITIAL DATA LOAD ---
+    console.log("scripts.js: Calling initial fetch functions inside runPageLogic."); // Add log
+    // --- FIX: Call setUsername at the start ---
+    setUsername(); // Set the username in the header first
     fetchEmployees();
-    fetchDashboardStats(); // Fetch stats on initial load
-});
+    fetchDashboardStats();
+
+} // --- End of runPageLogic ---
+
+
+// --- Add the event listener at the VERY END to call runPageLogic ---
+document.addEventListener('DOMContentLoaded', runPageLogic);
 

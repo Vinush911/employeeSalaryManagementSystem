@@ -42,7 +42,16 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const data = await response.json();
             if (response.ok) {
-                window.location.href = 'index.html'; // Redirect on success
+                
+                // --- THIS IS THE NEW LOGIC ---
+                // Redirect based on the user's role
+                if (data.role === 'admin') {
+                    window.location.href = 'index.html'; // Admin dashboard
+                } else {
+                    window.location.href = 'my_dashboard.html'; // Employee dashboard
+                }
+                // --- END OF NEW LOGIC ---
+
             } else {
                 messageDiv.textContent = data.error || 'Login failed.';
                 messageDiv.classList.remove('text-green-600');
@@ -87,4 +96,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
-

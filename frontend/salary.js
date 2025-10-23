@@ -1,98 +1,129 @@
-// This ensures the page is protected and logic runs AFTER auth check
-document.addEventListener('DOMContentLoaded', () => {
-    // Check auth status first
-    // --- THIS IS THE FIX ---
-    // Use the full, absolute URL for the API
-    fetch('http://127.0.0.1:5000/api/check-auth', { credentials: 'include' })
-        .then(res => res.json())
-        .then(data => {
-            if (!data.logged_in) {
-                // If not logged in, redirect to login page
-                window.location.href = 'login.html';
-            } else {
-                // If logged in, set username and run the page logic
-                const usernameDisplay = document.getElementById('username-display');
-                if(usernameDisplay) usernameDisplay.textContent = data.username;
-                runPageLogic(); // Run the main functions for this page
-            }
-        })
-        .catch(err => {
-            console.error('Auth check failed', err);
-            window.location.href = 'login.html';
-        });
-});
+// NO auth check or role check logic here. auth.js handles it.
 
-// Main function to encapsulate all page logic
+// --- Main function for the Salary page (salary.html) ---
 function runPageLogic() {
-    // Get all necessary elements from the page
+    console.log("salary.js: runPageLogic() started."); // Add log
+
+    // --- ELEMENT SELECTORS ---
     const employeeNameHeader = document.getElementById('employee-name-header');
     const salaryHistoryBody = document.getElementById('salary-history-body');
     const addSalaryForm = document.getElementById('add-salary-form');
-    const employeeIdInput = document.getElementById('employee-id');
-    const baseSalaryInput = document.getElementById('base-salary');
+    const employeeIdInput = document.getElementById('employee-id'); // Hidden input
+    const baseSalaryInput = document.getElementById('base-salary'); // Hidden input
     const salaryFormMessage = document.getElementById('salary-form-message');
     const logoutButton = document.getElementById('logout-button');
+    const monthInput = document.getElementById('month'); // Get month input for validation/reset
+    const bonusInput = document.getElementById('bonus'); // Get bonus input for validation/reset
+    const deductionsInput = document.getElementById('deductions'); // Get deductions input
 
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
-    
+
     // Get employee ID from the URL query parameter
     const urlParams = new URLSearchParams(window.location.search);
     const employeeId = urlParams.get('employee_id');
-    
+
     if (!employeeId) {
-        // If no ID is found, redirect back to the main dashboard
-        window.location.href = 'index.html'; 
-        return;
+        console.error("salary.js: No employee_id found in URL. Redirecting."); // Add log
+        // Redirect if employee_id is missing
+        window.location.href = 'index.html';
+        return; // Stop further execution
     }
+     console.log(`salary.js: Managing salary for employee_id: ${employeeId}`); // Add log
+
 
     // --- HELPER FUNCTIONS ---
-    const formatCurrency = (amount) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount);
-    
+    // Updated formatCurrency to handle potential null/undefined values
+    const formatCurrency = (amount) => amount != null ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount) : 'N/A';
+
+    // Updated formatMonthYear to handle potential errors
     const formatMonthYear = (dateString) => {
         if (!dateString) return 'Invalid Date';
-        // Add 'T00:00:00' to ensure the date is parsed in local time, not UTC
-        const date = new Date(dateString + 'T00:00:00'); 
-        return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        try {
+            // Add 'T00:00:00' to hint local time interpretation
+            const date = new Date(dateString + 'T00:00:00');
+            // Check if the date is valid before formatting
+            if (isNaN(date.getTime())) return 'Invalid Date';
+            return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        } catch (e) {
+            console.error("Error formatting date:", dateString, e);
+            return 'Invalid Date';
+        }
     };
 
-    // --- DATA FETCHING ---
-    // Fetches the employee's name to display in the header
+
+    // --- DATA FETCHING & RENDERING ---
     async function fetchEmployeeDetails() {
+         console.log("salary.js: fetchEmployeeDetails() called."); // Add log
+         if (!employeeNameHeader || !employeeIdInput || !baseSalaryInput) {
+            console.error("Required employee detail elements not found!");
+            return;
+         }
+         employeeNameHeader.textContent = 'Loading employee details...'; // Set loading state
         try {
             const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, { credentials: 'include' });
-            if (!response.ok) throw new Error('Failed to fetch employee details');
+            if (!response.ok) {
+                 if(response.status === 401) {
+                    console.error("fetchEmployeeDetails: Unauthorized (401). Should have been redirected by auth.js.");
+                    // window.location.href = 'login.html'; // Fallback redirect
+                    return; // Stop execution
+                }
+                 // Try to get error message from backend
+                let errorMsg = `Failed to fetch employee details (${response.status})`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch(e) { /* Ignore if response isn't JSON */ }
+                throw new Error(errorMsg);
+            }
             const employee = await response.json();
-            
-            employeeNameHeader.textContent = `Salary for ${employee.name}`;
-            employeeIdInput.value = employee.employee_id;
-            baseSalaryInput.value = employee.base_salary;
-        } catch (error)
-{
+             console.log("salary.js: Employee details received:", employee); // Add log
+            employeeNameHeader.textContent = `Salary for ${employee.name ?? 'Unknown Employee'}`;
+            // Populate hidden fields needed for form submission
+            employeeIdInput.value = employee.employee_id ?? '';
+            baseSalaryInput.value = employee.base_salary ?? '';
+        } catch (error) {
             console.error('Error fetching employee details:', error);
             employeeNameHeader.textContent = 'Error loading employee data';
         }
     }
 
-    // Fetches all past salary records for this employee
     async function fetchSalaryHistory() {
+        console.log("salary.js: fetchSalaryHistory() called."); // Add log
+        if (!salaryHistoryBody) {
+             console.error("Salary history table body not found!");
+             return;
+        }
+        salaryHistoryBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">Loading salary history...</td></tr>`; // Show loading state
+
         try {
             const response = await fetch(`${API_BASE_URL}/employees/${employeeId}/salaries`, { credentials: 'include' });
-            if (!response.ok) throw new Error('Failed to fetch salary history');
+            if (!response.ok) {
+                 if(response.status === 401) return; // Handled by auth.js
+                 // Try to get error message from backend
+                let errorMsg = `Failed to fetch salary history (${response.status})`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch(e) { /* Ignore if response isn't JSON */ }
+                throw new Error(errorMsg);
+            }
             const salaries = await response.json();
-            
-            salaryHistoryBody.innerHTML = ''; // Clear existing rows
-            if (salaries.length === 0) {
-                salaryHistoryBody.innerHTML = `<tr><td colspan="8" class="text-center py-4">No salary records found.</td></tr>`;
+            console.log("salary.js: Salary history received:", salaries); // Add log
+
+            salaryHistoryBody.innerHTML = ''; // Clear loading message
+            if (!salaries || salaries.length === 0) {
+                salaryHistoryBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-gray-500">No salary records found.</td></tr>`;
             } else {
-                // Populate the table with salary records
                 salaries.forEach(salary => {
                     const row = document.createElement('tr');
-                    const base = salary.base_salary || 0; 
-                    const overtime = salary.overtime_pay || 0;
-                    const bonus = salary.bonus || 0;
-                    const deductions = salary.deductions || 0;
-                    const pf = salary.pf_amount || 0;
-                    
+                    // Add null checks for safety when accessing properties
+                    const base = salary.base_salary ?? 0;
+                    const overtime = salary.overtime_pay ?? 0;
+                    const bonus = salary.bonus ?? 0;
+                    const deductions = salary.deductions ?? 0;
+                    const pf = salary.pf_amount ?? 0;
+                    const total = salary.total_salary ?? 0; // Use total_salary calculated by DB trigger
+
                     row.innerHTML = `
                         <td class="py-2 px-4 border-b">${formatMonthYear(salary.month)}</td>
                         <td class="py-2 px-4 border-b text-right">${formatCurrency(base)}</td>
@@ -100,7 +131,7 @@ function runPageLogic() {
                         <td class="py-2 px-4 border-b text-right text-green-600">+ ${formatCurrency(bonus)}</td>
                         <td class="py-2 px-4 border-b text-right text-red-600">- ${formatCurrency(deductions)}</td>
                         <td class="py-2 px-4 border-b text-right text-red-600">- ${formatCurrency(pf)}</td>
-                        <td class="py-2 px-4 border-b text-right font-bold">${formatCurrency(salary.total_salary)}</td>
+                        <td class="py-2 px-4 border-b text-right font-bold">${formatCurrency(total)}</td>
                         <td class="py-2 px-4 border-b text-center">
                             <a href="slip.html?salary_id=${salary.salary_id}" target="_blank" class="bg-blue-500 hover:bg-blue-600 text-white text-xs font-bold py-1 px-2 rounded">
                                 Download Slip
@@ -117,70 +148,119 @@ function runPageLogic() {
     }
 
     // --- EVENT LISTENERS ---
-    
-    // Add event listener for the new salary form
     if (addSalaryForm) {
         addSalaryForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); // Stop the default form submission (page reload)
-            
-            const formData = new FormData(addSalaryForm);
-            
-            // Construct the data object to send to the backend
+            e.preventDefault();
+             console.log("salary.js: Add salary form submitted."); // Add log
+
+            // Ensure message element exists
+            if (!salaryFormMessage) {
+                console.error("Salary form message element not found!");
+                return;
+            }
+            // Ensure required inputs exist
+             if (!monthInput || !bonusInput || !deductionsInput) {
+                 console.error("Month, Bonus or Deductions input element not found!");
+                 alert("Error: Form elements missing. Please refresh.");
+                 return;
+             }
+
+            // Get data from form (use element references for values)
+            const monthValue = monthInput.value;
+            const bonusValue = bonusInput.value || 0; // Default to 0 if empty
+            const deductionsValue = deductionsInput.value || 0; // Default to 0 if empty
+
+            // Basic validation
+            if (!monthValue) {
+                alert("Please select a month.");
+                return;
+            }
+
             const salaryData = {
                 employee_id: employeeId,
-                month: formData.get('month') + '-01', // Ensure it's a full date for the DB
-                base_salary: baseSalaryInput.value, // Send the base salary
-                overtime_hours: formData.get('overtime_hours'),
-                overtime_pay: formData.get('overtime_pay'),
-                bonus: formData.get('bonus'),
-                deductions: formData.get('deductions'),
-                pf_amount: formData.get('pf_amount')
+                month: monthValue + '-01', // Append day for backend consistency
+                bonus: bonusValue,
+                deductions: deductionsValue
             };
+            console.log("salary.js: Sending salary data:", salaryData); // Add log
 
-            // Clear any previous messages
-            salaryFormMessage.textContent = '';
+
+            salaryFormMessage.textContent = 'Generating & adding record...'; // Indicate processing
             salaryFormMessage.classList.remove('text-red-600', 'text-green-600');
+            salaryFormMessage.classList.add('text-gray-600'); // Use neutral color for processing
 
             try {
-                // Send the data to the backend
                 const response = await fetch(`${API_BASE_URL}/salaries`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(salaryData),
-                    credentials: 'include' // Send cookies
+                    credentials: 'include'
                 });
 
-                const data = await response.json();
+                 // Try parsing JSON even for errors
+                 let data;
+                 try {
+                     data = await response.json();
+                     console.log("salary.js: Add salary response data:", data); // Add log
+                 } catch (jsonError) {
+                     console.error("salary.js: Failed to parse JSON response:", jsonError);
+                     throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
+                 }
+
 
                 if (!response.ok) {
-                    throw new Error(data.error || 'Failed to add salary');
+                    // Use error message from backend (e.g., "Attendance record not found")
+                    throw new Error(data.error || `Failed to add salary (Status: ${response.status})`);
                 }
-                
-                // Show success message and refresh the list
+
                 salaryFormMessage.textContent = 'Salary record added successfully!';
+                salaryFormMessage.classList.remove('text-red-600', 'text-gray-600');
                 salaryFormMessage.classList.add('text-green-600');
-                addSalaryForm.reset();
+                addSalaryForm.reset(); // Clear form on success
+                // Set default values back after reset if needed (optional)
+                // bonusInput.value = 0;
+                // deductionsInput.value = 0;
                 fetchSalaryHistory(); // Refresh the list
-                
+
             } catch (error) {
                 console.error('Error adding salary:', error);
-                salaryFormMessage.textContent = error.message;
+                salaryFormMessage.textContent = `Error: ${error.message}`;
+                salaryFormMessage.classList.remove('text-green-600', 'text-gray-600');
                 salaryFormMessage.classList.add('text-red-600');
             }
         });
+    } else {
+         console.warn("salary.js: Add salary form not found."); // Add log
     }
 
-    // Add event listener for the logout button
+    // Logout Button
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
-            await fetch(`${API_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
-            window.location.href = 'login.html';
+             console.log("salary.js: Logout button clicked."); // Add log
+             logoutButton.textContent = 'Logging out...';
+             logoutButton.disabled = true;
+            try {
+                 await fetch(`${API_BASE_URL}/logout`, { method: 'POST', credentials: 'include' });
+                 window.location.href = 'login.html';
+            } catch (logoutError) {
+                 console.error("Logout failed:", logoutError);
+                 alert("Logout failed. Please try again or close the tab.");
+                 logoutButton.textContent = 'Logout';
+                 logoutButton.disabled = false;
+            }
         });
+    } else {
+        console.warn("salary.js: Logout button not found."); // Add log
     }
 
-    // --- INITIAL LOAD ---
-    // Fetch all necessary data when the page loads
+    // --- INITIAL DATA LOAD ---
+    console.log("salary.js: Calling initial fetch functions inside runPageLogic."); // Add log
     fetchEmployeeDetails();
     fetchSalaryHistory();
-}
+
+} // --- End of runPageLogic ---
+
+
+// --- Add the event listener at the VERY END to call runPageLogic ---
+document.addEventListener('DOMContentLoaded', runPageLogic);
 
