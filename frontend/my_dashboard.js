@@ -10,8 +10,9 @@ function runPageLogic() {
     const employeeIdEl = document.getElementById('employee-id');
     const departmentEl = document.getElementById('employee-department');
     const positionEl = document.getElementById('employee-position');
-    const joiningDateEl = document.getElementById('employee-joining-date');
-    const baseSalaryEl = document.getElementById('employee-base-salary');
+    // --- FIX: Corrected ID ---
+    const joiningDateEl = document.getElementById('employee-joining');
+    const baseSalaryEl = document.getElementById('employee-salary');
 
     // History Table Bodies
     const salaryHistoryBody = document.getElementById('salary-history-body');
@@ -22,6 +23,12 @@ function runPageLogic() {
 
     // --- FIX: Add selector for the username display in the header ---
     const usernameDisplay = document.getElementById('username-display');
+
+    // --- NEW: Leave Request Elements ---
+    const leaveRequestForm = document.getElementById('leave-request-form');
+    const leaveFormMessage = document.getElementById('leave-form-message');
+    const leaveHistoryBody = document.getElementById('leave-history-body');
+
 
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
@@ -54,18 +61,40 @@ function runPageLogic() {
 
     // --- HELPER FUNCTIONS ---
     const formatCurrency = (amount) => amount != null ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount) : 'N/A';
-    const formatDate = (dateString) => dateString ? new Date(dateString.split(' ')[0]).toLocaleDateString('en-GB') : 'N/A'; // Simple DD/MM/YYYY
+    // --- FIX: Robust Date Formatter ---
+    const formatDate = (dateString) => {
+        if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString.split(' ')[0].replace(/-/g, '/')); // Handle YYYY-MM-DD
+            if (isNaN(date.getTime())) return 'N/A';
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }); // DD/MM/YYYY
+        } catch (e) { return 'N/A'; }
+    };
      const formatMonthYear = (dateString) => {
         if (!dateString) return 'N/A';
         try {
-            // Add 'T00:00:00' to hint local time interpretation
-            const date = new Date(dateString + 'T00:00:00');
-            // Check if the date is valid before formatting
+            // Robust parsing for 'YYYY-MM-DD'
+            const parts = dateString.split('-');
+            if (parts.length < 2) return 'Invalid Date';
+            const date = new Date(parts[0], parts[1] - 1, 1); // Use 1st day
+
             if (isNaN(date.getTime())) return 'Invalid Date';
             return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
         } catch (e) {
             console.error("Error formatting date:", dateString, e);
             return 'Invalid Date';
+        }
+    };
+
+    // --- NEW: Helper for status badge ---
+    const getStatusBadge = (status) => {
+        status = (status || 'pending').toLowerCase();
+        if (status === 'approved') {
+            return `<span class="px-2 py-0.5 text-xs font-semibold text-green-800 bg-green-100 rounded-full">${status}</span>`;
+        } else if (status === 'denied') {
+            return `<span class="px-2 py-0.5 text-xs font-semibold text-red-800 bg-red-100 rounded-full">${status}</span>`;
+        } else {
+            return `<span class="px-2 py-0.5 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">${status}</span>`;
         }
     };
 
@@ -105,15 +134,13 @@ function runPageLogic() {
         } catch (error) {
             console.error('Error fetching profile data:', error);
             // Display error in profile section
-             if (employeeNameEl) employeeNameEl.textContent = 'Error loading';
+             if (employeeNameEl) employeeNameEl.innerHTML = `<span class="text-red-500">${error.message}</span>`;
              // Set other fields to loading or error state
-             if (employeeIdEl) employeeIdEl.textContent = 'Loading...';
-             if (departmentEl) departmentEl.textContent = 'Loading...';
-             if (positionEl) positionEl.textContent = 'Loading...';
-             if (joiningDateEl) joiningDateEl.textContent = 'Loading...';
-             if (baseSalaryEl) baseSalaryEl.textContent = 'Loading...';
-             // Optionally display the error message somewhere specific
-             // e.g., create a dedicated error div for the profile section
+             if (employeeIdEl) employeeIdEl.textContent = 'N/A';
+             if (departmentEl) departmentEl.textContent = 'N/A';
+             if (positionEl) positionEl.textContent = 'N/A';
+             if (joiningDateEl) joiningDateEl.textContent = 'N/A';
+             if (baseSalaryEl) baseSalaryEl.textContent = 'N/A';
         }
     }
 
@@ -211,6 +238,51 @@ function runPageLogic() {
         }
     }
 
+    // --- NEW: Fetch Leave Request History ---
+    async function fetchMyLeaveRequests() {
+        console.log("my_dashboard.js: fetchMyLeaveRequests() called.");
+        if (!leaveHistoryBody) {
+            console.error("Leave history table body not found!");
+            return;
+        }
+        leaveHistoryBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-gray-500">Loading...</td></tr>`;
+        try {
+            const response = await fetch(`${API_BASE_URL}/my-leave-requests`, { credentials: 'include' });
+            if (!response.ok) {
+                if(response.status === 404) { // 404 means no employee profile
+                     const errorData = await response.json();
+                     throw new Error(errorData.error || 'Profile not found.');
+                }
+                throw new Error(`Failed to fetch leave history (${response.status})`);
+            }
+            const requests = await response.json();
+            console.log("my_dashboard.js: Leave requests received:", requests);
+
+            leaveHistoryBody.innerHTML = ''; // Clear loading
+            if (!requests || requests.length === 0) {
+                leaveHistoryBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-gray-500">No requests found.</td></tr>`;
+            } else {
+                requests.forEach(req => {
+                    const row = document.createElement('tr');
+                    const dates = `${formatDate(req.start_date)} - ${formatDate(req.end_date)}`;
+                    row.innerHTML = `
+                        <td class="py-2 px-3 border-b">${dates}</td>
+                        <td class="py-2 px-3 border-b">${getStatusBadge(req.status)}</td>
+                    `;
+                    leaveHistoryBody.appendChild(row);
+                });
+            }
+        } catch (error) {
+            console.error('Error fetching leave history:', error);
+            leaveHistoryBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-red-500">${error.message}</td></tr>`;
+            // Disable the form if profile not found
+            if (leaveRequestForm && error.message.includes('No employee profile')) {
+                leaveRequestForm.innerHTML = `<p class="text-red-500 text-sm">Cannot submit requests: ${error.message}</p>`;
+            }
+        }
+    }
+
+
     // --- EVENT LISTENERS ---
 
     // Logout Button
@@ -233,6 +305,62 @@ function runPageLogic() {
          console.warn("my_dashboard.js: Logout button not found."); // Add log
     }
 
+    // --- NEW: Leave Request Form Submission ---
+    if (leaveRequestForm) {
+        leaveRequestForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            console.log("my_dashboard.js: Submitting leave request.");
+            if (!leaveFormMessage) return;
+
+            const formData = new FormData(leaveRequestForm);
+            const requestData = Object.fromEntries(formData.entries());
+
+            // Basic validation
+            if (requestData.end_date < requestData.start_date) {
+                leaveFormMessage.textContent = 'End date cannot be before start date.';
+                leaveFormMessage.className = 'mt-2 text-center text-sm text-red-600';
+                return;
+            }
+
+            // Check if dates are in the same month
+            const startMonth = requestData.start_date.substring(0, 7);
+            const endMonth = requestData.end_date.substring(0, 7);
+            if (startMonth !== endMonth) {
+                 leaveFormMessage.textContent = 'Leave requests must be within the same month.';
+                 leaveFormMessage.className = 'mt-2 text-center text-sm text-red-600';
+                 return;
+            }
+
+            leaveFormMessage.textContent = 'Submitting...';
+            leaveFormMessage.className = 'mt-2 text-center text-sm text-gray-600';
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/my-leave-requests`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(requestData),
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to submit request.');
+                }
+
+                leaveFormMessage.textContent = 'Request submitted!';
+                leaveFormMessage.className = 'mt-2 text-center text-sm text-green-600';
+                leaveRequestForm.reset();
+                fetchMyLeaveRequests(); // Refresh history
+
+            } catch (error) {
+                 console.error("Leave request error:", error);
+                 leaveFormMessage.textContent = `Error: ${error.message}`;
+                 leaveFormMessage.className = 'mt-2 text-center text-sm text-red-600';
+            }
+        });
+    }
+
+
     // --- INITIAL DATA LOAD ---
     console.log("my_dashboard.js: Calling initial fetch functions inside runPageLogic."); // Add log
     // --- FIX: Call setUsername at the start ---
@@ -240,10 +368,10 @@ function runPageLogic() {
     fetchMyProfile();
     fetchMySalaries();
     fetchMyAttendance();
+    fetchMyLeaveRequests(); // --- NEW ---
 
 } // --- End of runPageLogic ---
 
 
 // --- Add the event listener at the VERY END to call runPageLogic ---
 document.addEventListener('DOMContentLoaded', runPageLogic);
-

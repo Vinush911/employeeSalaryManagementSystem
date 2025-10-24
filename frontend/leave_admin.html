@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Leave Requests</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+    <!-- This script runs first to protect the page -->
+    <script src="auth.js" defer></script>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center py-4">
+                <div>
+                    <h1 class="text-xl font-bold text-gray-800">Leave Management</h1>
+                    <p class="text-sm text-gray-500">Welcome, <span id="username-display" class="font-semibold">...</span></p>
+                </div>
+                <button id="logout-button" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-md shadow-sm transition duration-300">
+                    Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto p-8">
+
+        <header class="mb-8">
+            <a href="index.html" class="text-blue-500 hover:underline">&larr; Back to Dashboard</a>
+            <h1 class="text-3xl font-bold mt-2 text-gray-700">Manage Leave Requests</h1>
+            <p class="text-gray-500">Approve or deny employee leave requests.</p>
+        </header>
+
+        <main class="bg-white p-6 rounded-lg shadow-md">
+
+            <!-- Filter Buttons -->
+            <div class="flex space-x-2 mb-4" id="filter-buttons">
+                <button data-status="pending" class="filter-btn bg-blue-600 text-white font-semibold py-2 px-4 rounded">Pending</button>
+                <button data-status="approved" class="filter-btn bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">Approved</button>
+                <button data-status="denied" class="filter-btn bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">Denied</button>
+                <button data-status="" class="filter-btn bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded">All</button>
+            </div>
+
+            <!-- Leave Requests Table -->
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase">Employee</th>
+                            <th class="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
+                            <th class="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+                            <th class="py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="py-3 px-6 text-center text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leave-table-body" class="text-gray-600 text-sm">
+                        <!-- Rows will be injected by JavaScript -->
+                    </tbody>
+                </table>
+                 <p id="table-message" class="text-center py-4 text-gray-500"></p>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="notification-toast" class="hidden fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg">
+        <p id="notification-message"></p>
+    </div>
+
+    <!-- This script runs *after* auth.js and controls this page -->
+    <script src="leave_admin.js" defer></script>
+</body>
+</html>

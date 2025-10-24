@@ -25,6 +25,8 @@ function runPageLogic() {
     const editForm = document.getElementById('edit-form');
     const closeModalButton = document.getElementById('close-modal');
     const cancelEditButton = document.getElementById('cancel-edit');
+    // --- NEW: Selector for user dropdown ---
+    const editUserIdSelect = document.getElementById('edit_user_id');
 
     // Notification and Confirmation Elements
     const notificationToast = document.getElementById('notification-toast');
@@ -142,7 +144,8 @@ function runPageLogic() {
         employeeTableBody.innerHTML = ''; // Clear previous results immediately
 
         try {
-            const response = await fetch(`${API_BASE_URL}/employees?search=${encodeURIComponent(searchTerm)}&department=${encodeURIComponent(department)}`, {
+            // --- MODIFIED: Fetch linked username as well ---
+            const response = await fetch(`${API_BASE_URL}/employees?search=${encodeURIComponent(searchTerm)}&department=${encodeURIComponent(department)}&include_linked_user=true`, {
                 credentials: 'include'
             });
             if (!response.ok) {
@@ -163,10 +166,19 @@ function runPageLogic() {
             } else {
                 data.employees.forEach(emp => {
                     const row = document.createElement('tr');
+                    // --- NEW: Add linked username display ---
+                    const linkedUserText = emp.linked_username 
+                        ? `<span class="text-xs text-blue-600">(${emp.linked_username})</span>` 
+                        : `<span class="text-xs text-gray-400">(Unlinked)</span>`;
+                    
                     // Add null checks for safety
                     row.innerHTML = `
                         <td class="py-2 px-4 border-b">${emp.employee_id ?? 'N/A'}</td>
-                        <td class="py-2 px-4 border-b">${emp.name ?? 'N/A'}</td>
+                        <td class="py-2 px-4 border-b">
+                            ${emp.name ?? 'N/A'}
+                            <br>
+                            ${linkedUserText}
+                        </td>
                         <td class="py-2 px-4 border-b">${emp.department ?? 'N/A'}</td>
                         <td class="py-2 px-4 border-b">${emp.position ?? 'N/A'}</td>
                         <td class="py-2 px-4 border-b">${formatDate(emp.joining_date)}</td>
@@ -373,7 +385,7 @@ function runPageLogic() {
                 confirmModal.classList.remove('hidden');
             }
             else if (action === 'edit') {
-                 if (!editModal || !editForm) {
+                 if (!editModal || !editForm || !editUserIdSelect) { // Check for dropdown too
                      console.error("Edit modal elements not found!");
                      alert("Cannot open edit form. Please refresh.");
                      return;
@@ -381,7 +393,20 @@ function runPageLogic() {
                 try {
                      button.textContent = 'Loading...'; // Indicate loading
                      button.disabled = true;
-                    const response = await fetch(`${API_BASE_URL}/employees/${id}`, { credentials: 'include' });
+
+                     // --- NEW: Reset dropdown and set loading state ---
+                     editUserIdSelect.innerHTML = '<option value="">Loading users...</option>';
+                     editUserIdSelect.disabled = true;
+
+                     // --- NEW: Fetch unlinked users first ---
+                     const usersResponse = await fetch(`${API_BASE_URL}/users/unlinked`, { credentials: 'include' });
+                     if (!usersResponse.ok) {
+                        throw new Error(`Failed to load unlinked users (${usersResponse.status})`);
+                     }
+                     const unlinkedUsers = await usersResponse.json();
+
+                     // --- MODIFIED: Fetch employee with linked user info ---
+                    const response = await fetch(`${API_BASE_URL}/employees/${id}?include_linked_user=true`, { credentials: 'include' });
                     if (!response.ok) {
                          if(response.status === 401 || response.status === 403) return; // Auth handled
                          let errorMsg = `Failed to load employee data (${response.status})`;
@@ -400,17 +425,46 @@ function runPageLogic() {
                     editForm.elements['department'].value = employee.department ?? '';
                     editForm.elements['position'].value = employee.position ?? '';
                     // Ensure date format is YYYY-MM-DD
-                    editForm.elements['joining_date'].value = (employee.joining_date ? employee.joining_date.split(' ')[0] : '');
+                    editForm.elements['joining_date'].value = (employee.joining_date ? employee.joining_date.split('T')[0] : ''); // Use split('T') for safety
                     editForm.elements['base_salary'].value = employee.base_salary ?? '';
+
+                    // --- NEW: Populate and set dropdown ---
+                    editUserIdSelect.innerHTML = ''; // Clear loading
+                    editUserIdSelect.add(new Option('-- Unlinked --', '')); // Add default unlinked option
+                    
+                    // Add all unlinked users
+                    unlinkedUsers.forEach(user => {
+                        editUserIdSelect.add(new Option(user.username, user.id));
+                    });
+
+                    // If employee is already linked, add their user to the list
+                    const currentUserId = employee.user_id;
+                    const currentUsername = employee.linked_username;
+                    
+                    if (currentUserId && currentUsername) {
+                        // Check if this user is somehow already in the unlinked list (shouldn't happen, but safe check)
+                        const alreadyInList = unlinkedUsers.some(user => user.id === currentUserId);
+                        if (!alreadyInList) {
+                            // Add the currently linked user to the dropdown
+                            editUserIdSelect.add(new Option(`${currentUsername} (Currently Linked)`, currentUserId));
+                        }
+                    }
+
+                    // Set the dropdown's selected value
+                    editUserIdSelect.value = currentUserId || '';
+                    editUserIdSelect.disabled = false; // Enable dropdown
 
                     editModal.classList.remove('hidden');
 
                 } catch (error) {
                     console.error('Edit load error:', error);
                     showNotification(`Could not load employee data for editing: ${error.message}`, true);
+                    editUserIdSelect.innerHTML = '<option value="">Error loading users</option>'; // Show error in dropdown
                 } finally {
                      button.textContent = 'Edit'; // Restore button text
                      button.disabled = false;
+                     // Ensure dropdown is enabled if modal didn't open
+                     editUserIdSelect.disabled = false;
                 }
             }
         });
@@ -465,8 +519,9 @@ function runPageLogic() {
                 department: e.target.elements['department'].value,
                 position: e.target.elements['position'].value,
                 joining_date: e.target.elements['joining_date'].value,
-                base_salary: e.target.elements['base_salary'].value
-                // Include user_id if you add a field for it in the modal
+                base_salary: e.target.elements['base_salary'].value,
+                // --- NEW: Get the selected user_id from the dropdown ---
+                user_id: e.target.elements['user_id'].value
             };
 
             // Simple validation
@@ -499,11 +554,18 @@ function runPageLogic() {
                 }
                 if (editModal) editModal.classList.add('hidden'); // Hide modal on success
                 showNotification(data.message || 'Employee updated successfully!'); // Use message from backend if available
-                fetchEmployees(searchInput.value, departmentFilter.value); // Refresh list/chart
+                
+                // --- MODIFIED: Refresh list/chart with current filters ---
+                fetchEmployees(searchInput.value, departmentFilter.value); 
                 fetchDashboardStats(); // Refresh stats
             } catch (error) {
                  console.error('Update error:', error);
-                 showNotification(`Error updating employee: ${error.message}`, true);
+                 // --- NEW: Check for specific 409 (Conflict) error ---
+                 if (error.message.includes("409")) {
+                     showNotification("Update failed: This user account is already linked to another employee.", true);
+                 } else {
+                     showNotification(`Error updating employee: ${error.message}`, true);
+                 }
             } finally {
                  if(saveButton) saveButton.disabled = false; // Re-enable button
             }
@@ -607,4 +669,3 @@ function runPageLogic() {
 
 // --- Add the event listener at the VERY END to call runPageLogic ---
 document.addEventListener('DOMContentLoaded', runPageLogic);
-

@@ -30,7 +30,7 @@
     </header>
 
     <div class="container mx-auto p-8">
-        
+
         <!-- Employee Details -->
         <section class="mb-8">
             <div class="bg-white p-6 rounded-lg shadow-md">
@@ -46,8 +46,9 @@
             </div>
         </section>
 
-        <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            
+        <!-- === MODIFIED: Changed to 3 columns === -->
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
             <!-- My Salary History -->
             <div class="bg-white p-6 rounded-lg shadow-md">
                 <h2 class="text-2xl font-semibold mb-4 border-b pb-2">My Salary History</h2>
@@ -86,6 +87,48 @@
                     </table>
                 </div>
             </div>
+
+            <!-- === NEW: Leave Request Section === -->
+            <div class="bg-white p-6 rounded-lg shadow-md">
+                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">My Leave Requests</h2>
+
+                <!-- New Request Form -->
+                <form id="leave-request-form" class="space-y-4 mb-6">
+                    <div>
+                        <label for="start_date" class="block text-sm font-medium text-gray-700">Start Date</label>
+                        <input type="date" id="start_date" name="start_date" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                    </div>
+                    <div>
+                        <label for="end_date" class="block text-sm font-medium text-gray-700">End Date</label>
+                        <input type="date" id="end_date" name="end_date" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                    </div>
+                    <div>
+                        <label for="reason" class="block text-sm font-medium text-gray-700">Reason (Optional)</label>
+                        <input type="text" id="reason" name="reason" class="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-md shadow-lg transition duration-300">
+                        Submit Request
+                    </button>
+                    <p id="leave-form-message" class="mt-2 text-center text-sm"></p>
+                </form>
+
+                <!-- Request History -->
+                <h3 class="text-lg font-semibold mb-2 text-gray-700">Request History</h3>
+                <div class="overflow-y-auto max-h-64">
+                    <table class="min-w-full bg-white">
+                        <thead class="bg-gray-50 sticky top-0">
+                            <tr>
+                                <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">Dates</th>
+                                <th class="py-2 px-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leave-history-body" class="text-gray-600 text-sm">
+                            <!-- Rows will be injected by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- === END NEW SECTION === -->
 
         </main>
     </div>

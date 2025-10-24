@@ -11,12 +11,38 @@ function runPageLogic() {
     const tableError = document.getElementById('table-error');
     const logoutButton = document.getElementById('logout-button');
 
+    // --- NEW: Selectors for new hires chart ---
+    const newHiresChartCanvas = document.getElementById('new-hires-chart');
+    const newHiresChartError = document.getElementById('new-hires-chart-error');
+
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
-    let myChart = null; // Variable to hold the chart instance
+    let myChart = null; // Variable to hold the bar chart instance
+    // --- NEW: Variable for line chart instance ---
+    let newHiresChart = null; 
 
     // --- HELPER FUNCTIONS ---
     // Updated formatCurrency to handle null/undefined
     const formatCurrency = (amount) => amount != null ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount) : 'N/A';
+
+    // --- NEW: formatMonthYear helper (ROBUST VERSION) ---
+    const formatMonthYear = (dateString) => {
+        if (!dateString) return 'Invalid Date';
+        try {
+            // Robust parsing for 'YYYY-MM-DD'
+            const parts = dateString.split('-');
+            if (parts.length !== 3) return 'Invalid Date';
+            
+            // new Date(year, monthIndex, day)
+            // parts[1] - 1 because months are 0-indexed
+            const date = new Date(parts[0], parts[1] - 1, parts[2]);
+            
+            if (isNaN(date.getTime())) return 'Invalid Date';
+            return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+        } catch (e) {
+            console.error("Error formatting date:", dateString, e);
+            return 'Invalid Date';
+        }
+    };
 
 
     // --- DATA FETCHING & RENDERING ---
@@ -24,9 +50,7 @@ function runPageLogic() {
         console.log("reports.js: fetchReportData() called."); // Add log
         // Ensure elements exist
         if (!reportTableBody || !chartCanvas || !chartError || !tableError) {
-             console.error("Report page elements not found!");
-             // Optionally display an error message on the page body if critical elements are missing
-             document.body.innerHTML = '<p class="text-red-500 p-4">Error: Required page elements are missing. Cannot load report.</p>';
+             console.error("Report page elements (bar chart/table) not found!");
              return;
         }
 
@@ -144,9 +168,9 @@ function runPageLogic() {
                         }
                     }
                 });
-                console.log("reports.js: Chart rendered successfully."); // Add log
+                console.log("reports.js: Bar chart rendered successfully."); // Add log
             } catch(chartRenderError) {
-                 console.error("reports.js: Error rendering Chart.js:", chartRenderError);
+                 console.error("reports.js: Error rendering Chart.js (bar):", chartRenderError);
                  chartError.textContent = 'Error displaying chart.';
             }
 
@@ -160,6 +184,107 @@ function runPageLogic() {
             if (myChart) { myChart.destroy(); myChart = null; }
         }
     }
+
+
+    // --- NEW: Function to fetch and render new hires chart ---
+    async function fetchNewHiresReport() {
+        console.log("reports.js: fetchNewHiresReport() called.");
+        if (!newHiresChartCanvas || !newHiresChartError) {
+            console.error("New hires chart elements not found!");
+            return;
+        }
+        newHiresChartError.textContent = 'Loading chart data...';
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/reports/new-hires`, { credentials: 'include' });
+            if (!response.ok) {
+                if (response.status === 401) return; // Auth handled
+                let errorMsg = `Failed to fetch new hires report (${response.status})`;
+                try {
+                    const errorData = await response.json();
+                    errorMsg = errorData.error || errorMsg;
+                } catch (e) { /* Ignore */ }
+                throw new Error(errorMsg);
+            }
+            const data = await response.json();
+            console.log("reports.js: New hires data received:", data);
+
+            if (!data || data.length === 0) {
+                newHiresChartError.textContent = 'No new hire data available to display.';
+                if (newHiresChart) { newHiresChart.destroy(); newHiresChart = null; } // Clear old chart
+                return;
+            }
+            
+            newHiresChartError.textContent = ''; // Clear loading message
+            renderNewHireChart(data); // Call the render function
+
+        } catch (error) {
+            console.error('Error fetching new hires report:', error);
+            newHiresChartError.textContent = `Failed to load new hires chart: ${error.message}`;
+            if (newHiresChart) { newHiresChart.destroy(); newHiresChart = null; } // Clear old chart
+        }
+    }
+
+    // --- NEW: Function to render new hires chart ---
+    function renderNewHireChart(data) {
+        // Format labels from 'YYYY-MM-DD' to 'Month Year'
+        const labels = data.map(item => formatMonthYear(item.hire_month));
+        const chartData = data.map(item => item.hire_count);
+
+        if (newHiresChart) {
+            newHiresChart.destroy(); // Destroy old instance
+        }
+
+        try {
+            newHiresChart = new Chart(newHiresChartCanvas, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'New Hires',
+                        data: chartData,
+                        fill: true, // Make it an area chart
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)', // Greenish
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        tension: 0.1 // Slight curve
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1, // Only whole numbers for "hires"
+                                callback: (value) => { if (value % 1 === 0) return value; } // Show only integers
+                            }
+                        },
+                        x: {
+                             ticks: {
+                                maxRotation: 0,
+                                autoSkip: true,
+                                maxTicksLimit: 12 // Limit number of date labels
+                             }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: (context) => `${context.raw} new hires`
+                            }
+                        }
+                    }
+                }
+            });
+             console.log("reports.js: New hires chart rendered successfully.");
+        } catch (chartRenderError) {
+            console.error("reports.js: Error rendering new hires chart:", chartRenderError);
+            newHiresChartError.textContent = 'Error displaying new hires chart.';
+        }
+    }
+
 
     // --- EVENT LISTENERS ---
 
@@ -186,10 +311,10 @@ function runPageLogic() {
     // --- INITIAL DATA LOAD ---
     console.log("reports.js: Calling initial fetch functions inside runPageLogic."); // Add log
     fetchReportData();
+    fetchNewHiresReport(); // --- NEW: Call the new function ---
 
 } // --- End of runPageLogic ---
 
 
 // --- Add the event listener at the VERY END to call runPageLogic ---
 document.addEventListener('DOMContentLoaded', runPageLogic);
-
