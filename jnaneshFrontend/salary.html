@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Salary Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+  </style>
+  <script src="auth.js" defer></script>
+</head>
+
+<body class="bg-gradient-to-br from-indigo-50 via-blue-50 to-purple-50 text-gray-800 min-h-screen">
+
+  <!-- HEADER -->
+  <header class="bg-gradient-to-r from-blue-600 to-indigo-600 shadow-lg">
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center py-4 text-white">
+        <div>
+          <h1 class="text-2xl font-bold tracking-wide">Salary Management</h1>
+          <p class="text-sm opacity-90">Welcome, <span id="username-display" class="font-semibold">...</span></p>
+        </div>
+        <button id="logout-button"
+          class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md shadow-md transition duration-300">
+          Logout
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <div class="container mx-auto p-8">
+
+    <!-- PAGE HEADER -->
+    <header class="mb-8">
+      <a href="index.html" class="inline-flex items-center text-blue-600 hover:text-blue-800 font-semibold transition">
+        &larr; Back to Dashboard
+      </a>
+      <h1 id="employee-name-header" class="text-3xl font-extrabold mt-3 text-gray-800 animate-pulse">Loading...</h1>
+      <p class="text-gray-500">Manage and generate salary records for this employee.</p>
+    </header>
+
+    <!-- MAIN GRID -->
+    <main class="grid grid-cols-1 md:grid-cols-3 gap-8">
+
+      <!-- LEFT: Salary Form -->
+      <div class="md:col-span-1 bg-white/90 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-gray-100 hover:shadow-2xl transition duration-300">
+        <h2 class="text-2xl font-bold mb-4 text-blue-700 border-b-2 border-blue-100 pb-2">Generate Salary Record</h2>
+
+        <form id="add-salary-form" class="space-y-5">
+          <input type="hidden" id="employee-id">
+          <input type="hidden" id="base-salary">
+
+          <div>
+            <label for="month" class="block text-sm font-semibold text-gray-700 mb-1">Month</label>
+            <input type="month" id="month" name="month"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" required>
+          </div>
+
+          <div>
+            <label for="bonus" class="block text-sm font-semibold text-gray-700 mb-1">Bonus (₹)</label>
+            <input type="number" id="bonus" name="bonus" value="0" step="0.01"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-green-500 focus:border-green-500" required>
+          </div>
+
+          <div>
+            <label for="deductions" class="block text-sm font-semibold text-gray-700 mb-1">Deductions (₹)</label>
+            <input type="number" id="deductions" name="deductions" value="0" step="0.01"
+              class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-2 focus:ring-pink-500 focus:border-pink-500" required>
+          </div>
+
+          <button type="submit"
+            class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-indigo-700 hover:to-blue-700 text-white font-bold py-3 px-4 rounded-lg shadow-lg transform hover:scale-[1.02] transition duration-300">
+            💼 Generate & Add Record
+          </button>
+
+          <p id="salary-form-message" class="mt-4 text-center text-sm font-medium"></p>
+        </form>
+      </div>
+
+      <!-- RIGHT: Salary History -->
+      <div class="md:col-span-2 bg-white/90 backdrop-blur-md p-6 rounded-2xl shadow-xl border border-gray-100 hover:shadow-2xl transition duration-300">
+        <h2 class="text-2xl font-bold text-indigo-700 mb-4 border-b-2 border-indigo-100 pb-2 flex items-center gap-2">
+          📄 Salary History
+        </h2>
+
+        <div class="overflow-x-auto rounded-lg border border-gray-200 shadow-inner">
+          <table class="min-w-full bg-white rounded-lg overflow-hidden">
+            <thead class="bg-gradient-to-r from-indigo-100 to-blue-100">
+              <tr>
+                <th class="py-3 px-6 text-left text-xs font-semibold text-gray-700 uppercase">Month</th>
+                <th class="py-3 px-6 text-right text-xs font-semibold text-gray-700 uppercase">Base</th>
+                <th class="py-3 px-6 text-right text-xs font-semibold text-gray-700 uppercase">Overtime</th>
+                <th class="py-3 px-6 text-right text-xs font-semibold text-gray-700 uppercase">Bonus</th>
+                <th class="py-3 px-6 text-right text-xs font-semibold text-gray-700 uppercase">Deductions</th>
+                <th class="py-3 px-6 text-right text-xs font-semibold text-gray-700 uppercase">PF</th>
+                <th class="py-3 px-6 text-right text-xs font-semibold text-gray-700 uppercase">Total</th>
+                <th class="py-3 px-6 text-center text-xs font-semibold text-gray-700 uppercase">Slip</th>
+              </tr>
+            </thead>
+            <tbody id="salary-history-body" class="text-gray-700 text-sm divide-y divide-gray-100">
+              <!-- Dynamic rows loaded here -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="salary.js" defer></script>
+</body>
+</html>
