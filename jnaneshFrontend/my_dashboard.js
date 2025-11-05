@@ -10,9 +10,11 @@ function runPageLogic() {
     const employeeIdEl = document.getElementById('employee-id');
     const departmentEl = document.getElementById('employee-department');
     const positionEl = document.getElementById('employee-position');
-    // --- FIX: Corrected ID ---
-    const joiningDateEl = document.getElementById('employee-joining');
+    
+    // === FIX: Use correct IDs from new my_dashboard.html ===
+    const joiningDateEl = document.getElementById('employee-joining'); 
     const baseSalaryEl = document.getElementById('employee-salary');
+    // === END FIX ===
 
     // History Table Bodies
     const salaryHistoryBody = document.getElementById('salary-history-body');
@@ -20,48 +22,46 @@ function runPageLogic() {
 
     // Logout Button
     const logoutButton = document.getElementById('logout-button');
-
-    // --- FIX: Add selector for the username display in the header ---
     const usernameDisplay = document.getElementById('username-display');
 
-    // --- NEW: Leave Request Elements ---
+    // Leave Request Elements
     const leaveRequestForm = document.getElementById('leave-request-form');
     const leaveFormMessage = document.getElementById('leave-form-message');
     const leaveHistoryBody = document.getElementById('leave-history-body');
 
-
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
-    // --- FIX: Function to set username ---
+    // --- HELPER: Set Username ---
     async function setUsername() {
         if (!usernameDisplay) {
-            console.warn("Username display element not found in header.");
+            console.warn("my_dashboard.js: Username display element not found in header.");
             return;
         }
-        try {
-            // Fetch auth details again to get username reliably
-            const response = await fetch(`${API_BASE_URL}/check-auth`, { credentials: 'include' });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.logged_in && data.username) {
-                    usernameDisplay.textContent = data.username;
-                    console.log("Username set in header:", data.username);
+         // auth.js sets the username, but if it's still '...' try fetching.
+        if (usernameDisplay.textContent === '...') {
+            try {
+                const response = await fetch(`${API_BASE_URL}/check-auth`, { credentials: 'include' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.logged_in && data.username) {
+                        usernameDisplay.textContent = data.username;
+                        console.log("my_dashboard.js: Username set in header:", data.username);
+                    } else {
+                         usernameDisplay.textContent = 'User'; // Fallback
+                    }
                 } else {
-                     usernameDisplay.textContent = 'User'; // Fallback
+                     usernameDisplay.textContent = 'Error'; // Indicate auth check failed
                 }
-            } else {
-                 usernameDisplay.textContent = 'Error'; // Indicate auth check failed
+            } catch (error) {
+                console.error("my_dashboard.js: Error fetching username for header:", error);
+                usernameDisplay.textContent = 'Error';
             }
-        } catch (error) {
-            console.error("Error fetching username for header:", error);
-            usernameDisplay.textContent = 'Error';
         }
     }
 
 
     // --- HELPER FUNCTIONS ---
     const formatCurrency = (amount) => amount != null ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount) : 'N/A';
-    // --- FIX: Robust Date Formatter ---
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         try {
@@ -94,7 +94,7 @@ function runPageLogic() {
         } else if (status === 'denied') {
             return `<span class="px-2 py-0.5 text-xs font-semibold text-red-800 bg-red-100 rounded-full">${status}</span>`;
         } else {
-            return `<span class="px-2 py-0.5 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">${status}</span>`;
+            return `<span class"px-2 py-0.5 text-xs font-semibold text-yellow-800 bg-yellow-100 rounded-full">${status}</span>`;
         }
     };
 
@@ -104,15 +104,22 @@ function runPageLogic() {
     // Fetch Employee Profile Data
     async function fetchMyProfile() {
         console.log("my_dashboard.js: fetchMyProfile() called."); // Add log
+        
+        // --- FIX: Check for the corrected IDs ---
+        if (!employeeNameEl || !employeeIdEl || !departmentEl || !positionEl || !joiningDateEl || !baseSalaryEl) {
+             console.error("my_dashboard.js: One or more profile elements are missing!");
+             if (employeeNameEl) employeeNameEl.innerHTML = `<span class="text-red-500">Page Error: Profile elements missing.</span>`;
+             return;
+        }
+        // --- END FIX ---
+
         try {
             const response = await fetch(`${API_BASE_URL}/my-profile`, { credentials: 'include' });
             if (!response.ok) {
                  if(response.status === 401) {
-                    console.error("fetchMyProfile: Unauthorized (401). Should have been redirected by auth.js.");
-                    // window.location.href = 'login.html'; // Fallback redirect
+                    console.error("fetchMyProfile: Unauthorized (401).");
                     return;
                 }
-                 // --- FIX: Try to get error message from backend ---
                  let errorMsg = `Failed to fetch profile (${response.status})`;
                  try {
                      const errorData = await response.json();
@@ -123,41 +130,37 @@ function runPageLogic() {
             const profile = await response.json();
             console.log("my_dashboard.js: Profile data received:", profile); // Add log
 
-            // Populate profile section (check if elements exist)
-            if (employeeNameEl) employeeNameEl.textContent = profile.name ?? 'N/A';
-            if (employeeIdEl) employeeIdEl.textContent = profile.employee_id ?? 'N/A';
-            if (departmentEl) departmentEl.textContent = profile.department ?? 'N/A';
-            if (positionEl) positionEl.textContent = profile.position ?? 'N/A';
-            if (joiningDateEl) joiningDateEl.textContent = formatDate(profile.joining_date);
-            if (baseSalaryEl) baseSalaryEl.textContent = formatCurrency(profile.base_salary);
+            // Populate profile section
+            employeeNameEl.textContent = profile.name ?? 'N/A';
+            employeeIdEl.textContent = profile.employee_id ?? 'N/A';
+            departmentEl.textContent = profile.department ?? 'N/A';
+            positionEl.textContent = profile.position ?? 'N/A';
+            joiningDateEl.textContent = formatDate(profile.joining_date); // Use corrected ID
+            baseSalaryEl.textContent = formatCurrency(profile.base_salary); // Use corrected ID
 
         } catch (error) {
             console.error('Error fetching profile data:', error);
-            // Display error in profile section
-             if (employeeNameEl) employeeNameEl.innerHTML = `<span class="text-red-500">${error.message}</span>`;
-             // Set other fields to loading or error state
-             if (employeeIdEl) employeeIdEl.textContent = 'N/A';
-             if (departmentEl) departmentEl.textContent = 'N/A';
-             if (positionEl) positionEl.textContent = 'N/A';
-             if (joiningDateEl) joiningDateEl.textContent = 'N/A';
-             if (baseSalaryEl) baseSalaryEl.textContent = 'N/A';
+             employeeNameEl.innerHTML = `<span class="text-red-500">${error.message}</span>`;
+             employeeIdEl.textContent = 'N/A';
+             departmentEl.textContent = 'N/A';
+             positionEl.textContent = 'N/A';
+             joiningDateEl.textContent = 'N/A';
+             baseSalaryEl.textContent = 'N/A';
         }
     }
 
     // Fetch Salary History
     async function fetchMySalaries() {
-        console.log("my_dashboard.js: fetchMySalaries() called."); // Add log
+        console.log("my_dashboard.js: fetchMySalaries() called.");
         if (!salaryHistoryBody) {
             console.error("Salary history table body not found!");
             return;
         }
-        // --- FIX: Add loading indicator ---
         salaryHistoryBody.innerHTML = `<tr><td colspan="3" class="text-center py-4 text-gray-500">Loading salary history...</td></tr>`;
         try {
             const response = await fetch(`${API_BASE_URL}/my-salaries`, { credentials: 'include' });
             if (!response.ok) {
-                if(response.status === 401) return; // Handled by auth.js
-                 // --- FIX: Try to get error message from backend ---
+                if(response.status === 401) return;
                  let errorMsg = `Failed to fetch salaries (${response.status})`;
                  try {
                      const errorData = await response.json();
@@ -166,7 +169,7 @@ function runPageLogic() {
                 throw new Error(errorMsg);
             }
             const salaries = await response.json();
-            console.log("my_dashboard.js: Salaries data received:", salaries); // Add log
+            console.log("my_dashboard.js: Salaries data received:", salaries);
 
             salaryHistoryBody.innerHTML = ''; // Clear existing rows
             if (!salaries || salaries.length === 0) {
@@ -194,18 +197,16 @@ function runPageLogic() {
 
     // Fetch Attendance History
     async function fetchMyAttendance() {
-         console.log("my_dashboard.js: fetchMyAttendance() called."); // Add log
+         console.log("my_dashboard.js: fetchMyAttendance() called.");
          if (!attendanceHistoryBody) {
              console.error("Attendance history table body not found!");
              return;
          }
-         // --- FIX: Add loading indicator ---
          attendanceHistoryBody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-gray-500">Loading attendance history...</td></tr>`;
         try {
             const response = await fetch(`${API_BASE_URL}/my-attendance`, { credentials: 'include' });
              if (!response.ok) {
-                if(response.status === 401) return; // Handled by auth.js
-                 // --- FIX: Try to get error message from backend ---
+                if(response.status === 401) return;
                  let errorMsg = `Failed to fetch attendance (${response.status})`;
                   try {
                      const errorData = await response.json();
@@ -214,7 +215,7 @@ function runPageLogic() {
                 throw new Error(errorMsg);
             }
             const attendance = await response.json();
-            console.log("my_dashboard.js: Attendance data received:", attendance); // Add log
+            console.log("my_dashboard.js: Attendance data received:", attendance);
 
             attendanceHistoryBody.innerHTML = ''; // Clear existing rows
             if (!attendance || attendance.length === 0) {
@@ -222,7 +223,6 @@ function runPageLogic() {
             } else {
                 attendance.forEach(record => {
                     const row = document.createElement('tr');
-                    // Add null checks for safety
                     row.innerHTML = `
                         <td class="py-2 px-4 border-b">${formatMonthYear(record.month)}</td>
                         <td class="py-2 px-4 border-b text-center">${record.days_present ?? 0}</td>
@@ -238,7 +238,7 @@ function runPageLogic() {
         }
     }
 
-    // --- NEW: Fetch Leave Request History ---
+    // --- Fetch Leave Request History ---
     async function fetchMyLeaveRequests() {
         console.log("my_dashboard.js: fetchMyLeaveRequests() called.");
         if (!leaveHistoryBody) {
@@ -249,7 +249,7 @@ function runPageLogic() {
         try {
             const response = await fetch(`${API_BASE_URL}/my-leave-requests`, { credentials: 'include' });
             if (!response.ok) {
-                if(response.status === 404) { // 404 means no employee profile
+                if(response.status === 404) {
                      const errorData = await response.json();
                      throw new Error(errorData.error || 'Profile not found.');
                 }
@@ -275,7 +275,6 @@ function runPageLogic() {
         } catch (error) {
             console.error('Error fetching leave history:', error);
             leaveHistoryBody.innerHTML = `<tr><td colspan="2" class="text-center py-4 text-red-500">${error.message}</td></tr>`;
-            // Disable the form if profile not found
             if (leaveRequestForm && error.message.includes('No employee profile')) {
                 leaveRequestForm.innerHTML = `<p class="text-red-500 text-sm">Cannot submit requests: ${error.message}</p>`;
             }
@@ -288,7 +287,7 @@ function runPageLogic() {
     // Logout Button
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
-             console.log("my_dashboard.js: Logout button clicked."); // Add log
+             console.log("my_dashboard.js: Logout button clicked.");
              logoutButton.textContent = 'Logging out...';
              logoutButton.disabled = true;
             try {
@@ -302,10 +301,10 @@ function runPageLogic() {
             }
         });
     } else {
-         console.warn("my_dashboard.js: Logout button not found."); // Add log
+         console.warn("my_dashboard.js: Logout button not found.");
     }
 
-    // --- NEW: Leave Request Form Submission ---
+    // --- Leave Request Form Submission ---
     if (leaveRequestForm) {
         leaveRequestForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -315,14 +314,12 @@ function runPageLogic() {
             const formData = new FormData(leaveRequestForm);
             const requestData = Object.fromEntries(formData.entries());
 
-            // Basic validation
             if (requestData.end_date < requestData.start_date) {
                 leaveFormMessage.textContent = 'End date cannot be before start date.';
                 leaveFormMessage.className = 'mt-2 text-center text-sm text-red-600';
                 return;
             }
 
-            // Check if dates are in the same month
             const startMonth = requestData.start_date.substring(0, 7);
             const endMonth = requestData.end_date.substring(0, 7);
             if (startMonth !== endMonth) {
@@ -358,17 +355,18 @@ function runPageLogic() {
                  leaveFormMessage.className = 'mt-2 text-center text-sm text-red-600';
             }
         });
+    } else {
+         console.warn("my_dashboard.js: Leave request form not found.");
     }
 
 
     // --- INITIAL DATA LOAD ---
-    console.log("my_dashboard.js: Calling initial fetch functions inside runPageLogic."); // Add log
-    // --- FIX: Call setUsername at the start ---
+    console.log("my_dashboard.js: Calling initial fetch functions inside runPageLogic.");
     setUsername(); // Set the username in the header first
     fetchMyProfile();
     fetchMySalaries();
     fetchMyAttendance();
-    fetchMyLeaveRequests(); // --- NEW ---
+    fetchMyLeaveRequests();
 
 } // --- End of runPageLogic ---
 

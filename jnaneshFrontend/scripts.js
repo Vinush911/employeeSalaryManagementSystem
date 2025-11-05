@@ -20,13 +20,13 @@ function runPageLogic() {
     const tableSpinner = document.getElementById('table-spinner');
     const tableContainer = document.getElementById('table-container');
 
-    // Edit Modal Elements
+    // === MODAL SELECTORS (CRITICAL) ===
     const editModal = document.getElementById('edit-modal');
     const editForm = document.getElementById('edit-form');
     const closeModalButton = document.getElementById('close-modal');
     const cancelEditButton = document.getElementById('cancel-edit');
-    // --- NEW: Selector for user dropdown ---
-    const editUserIdSelect = document.getElementById('edit_user_id');
+    const editUserIdSelect = document.getElementById('edit_user_id'); // User link dropdown
+    const editModalBackdrop = document.getElementById('edit-modal-backdrop'); // Modal backdrop
 
     // Notification and Confirmation Elements
     const notificationToast = document.getElementById('notification-toast');
@@ -35,46 +35,56 @@ function runPageLogic() {
     const confirmMessage = document.getElementById('confirm-message');
     const confirmYesButton = document.getElementById('confirm-yes');
     const confirmNoButton = document.getElementById('confirm-no');
+    const confirmModalBackdrop = document.getElementById('confirm-modal-backdrop'); // Modal backdrop
 
     // Logout Button
     const logoutButton = document.getElementById('logout-button');
-
-    // --- FIX: Add selector for the username display in the header ---
     const usernameDisplay = document.getElementById('username-display');
 
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
     let departmentChart = null;
     let employeeToDeleteId = null;
 
-    // --- FIX: Function to set username ---
+    // --- HELPER: Set Username ---
     async function setUsername() {
+        // This is handled by auth.js, but we can call it again
+        // just in case auth.js runs before the element exists.
         if (!usernameDisplay) {
             console.warn("scripts.js: Username display element not found in header.");
             return;
         }
-        try {
-            // Fetch auth details again to get username reliably
-            const response = await fetch(`${API_BASE_URL}/check-auth`, { credentials: 'include' });
-            if (response.ok) {
-                const data = await response.json();
-                if (data.logged_in && data.username) {
-                    usernameDisplay.textContent = data.username;
-                    console.log("scripts.js: Username set in header:", data.username);
+        // auth.js sets the username, but if it's still '...' try fetching.
+        if (usernameDisplay.textContent === '...') {
+             try {
+                const response = await fetch(`${API_BASE_URL}/check-auth`, { credentials: 'include' });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.logged_in && data.username) {
+                        usernameDisplay.textContent = data.username;
+                        console.log("scripts.js: Username set in header:", data.username);
+                    } else {
+                         usernameDisplay.textContent = 'Admin'; 
+                    }
                 } else {
-                     usernameDisplay.textContent = 'Admin'; // Fallback for admin page
+                     usernameDisplay.textContent = 'Error';
                 }
-            } else {
-                 usernameDisplay.textContent = 'Error'; // Indicate auth check failed
+            } catch (error) {
+                console.error("scripts.js: Error fetching username for header:", error);
+                usernameDisplay.textContent = 'Error';
             }
-        } catch (error) {
-            console.error("scripts.js: Error fetching username for header:", error);
-            usernameDisplay.textContent = 'Error';
         }
     }
 
     // --- HELPER FUNCTIONS ---
     const formatCurrency = (amount) => amount != null ? new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 }).format(amount) : 'N/A';
-    const formatDate = (dateString) => dateString ? new Date(dateString.split(' ')[0]).toLocaleDateString('en-GB') : 'N/A'; // Simple DD/MM/YYYY
+    const formatDate = (dateString) => {
+         if (!dateString) return 'N/A';
+        try {
+            const date = new Date(dateString.split(' ')[0].replace(/-/g, '/')); // Handle YYYY-MM-DD
+            if (isNaN(date.getTime())) return 'N/A';
+            return date.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }); // DD/MM/YYYY
+        } catch (e) { return 'N/A'; }
+    };
 
     const showNotification = (message, isError = false) => {
         if (!notificationToast || !notificationMessage) {
@@ -83,23 +93,47 @@ function runPageLogic() {
             return;
         }
         notificationMessage.textContent = message;
-        notificationToast.classList.remove('hidden', 'bg-red-500', 'bg-green-500'); // Reset classes
-        notificationToast.classList.add(isError ? 'bg-red-500' : 'bg-green-500');
+        
+        // Clear old classes
+        notificationToast.classList.remove('hidden', 'bg-gradient-to-r', 'from-red-500', 'to-rose-500', 'from-green-500', 'to-emerald-500', 'translate-y-4', 'opacity-0');
 
-        // Simple fade in/out (optional)
-        notificationToast.style.opacity = 1;
+        if (isError) {
+            notificationToast.classList.add('bg-gradient-to-r', 'from-red-500', 'to-rose-500');
+        } else {
+            notificationToast.classList.add('bg-gradient-to-r', 'from-green-500', 'to-emerald-500');
+        }
+        
+        // Show and animate
+        notificationToast.classList.remove('hidden');
         setTimeout(() => {
-            notificationToast.style.opacity = 0;
-            // Use transition end or another timeout to hide completely
+             notificationToast.classList.remove('translate-y-4', 'opacity-0');
+        }, 10); // 10ms delay to trigger transition
+
+        // Hide after 3 seconds
+        setTimeout(() => {
+            notificationToast.classList.add('opacity-0');
             setTimeout(() => notificationToast.classList.add('hidden'), 500); // Hide after fade
-        }, 3000); // Show for 3 seconds
+        }, 3000);
+    };
+    
+    // --- MODAL HELPER FUNCTIONS ---
+    const showEditModal = () => {
+        if (editModal) editModal.classList.remove('hidden');
+    };
+    const hideEditModal = () => {
+        if (editModal) editModal.classList.add('hidden');
+    };
+    const showConfirmModal = () => {
+        if (confirmModal) confirmModal.classList.remove('hidden');
+    };
+    const hideConfirmModal = () => {
+        if (confirmModal) confirmModal.classList.add('hidden');
     };
 
 
     // --- DATA FETCHING & RENDERING ---
     async function fetchDashboardStats() {
-        console.log("scripts.js: fetchDashboardStats() called."); // Add log
-        // Set loading state
+        console.log("scripts.js: fetchDashboardStats() called.");
         if(totalEmployeesEl) totalEmployeesEl.textContent = '...';
         if(totalDepartmentsEl) totalDepartmentsEl.textContent = '...';
         if(averageSalaryEl) averageSalaryEl.textContent = '...';
@@ -107,7 +141,7 @@ function runPageLogic() {
         try {
             const response = await fetch(`${API_BASE_URL}/dashboard-stats`, { credentials: 'include' });
             if (!response.ok) {
-                if(response.status === 401 || response.status === 403) return; // Handled by auth.js
+                if(response.status === 401 || response.status === 403) return;
                  let errorMsg = `Failed to fetch stats (${response.status})`;
                  try {
                      const errorData = await response.json();
@@ -116,7 +150,7 @@ function runPageLogic() {
                 throw new Error(errorMsg);
             }
             const stats = await response.json();
-             console.log("scripts.js: Dashboard stats received:", stats); // Add log
+            console.log("scripts.js: Dashboard stats received:", stats);
 
             if(totalEmployeesEl) totalEmployeesEl.textContent = stats.total_employees ?? 'N/A';
             if(totalDepartmentsEl) totalDepartmentsEl.textContent = stats.total_departments ?? 'N/A';
@@ -127,29 +161,27 @@ function runPageLogic() {
             if(totalEmployeesEl) totalEmployeesEl.textContent = 'N/A';
             if(totalDepartmentsEl) totalDepartmentsEl.textContent = 'N/A';
             if(averageSalaryEl) averageSalaryEl.textContent = 'N/A';
-            showNotification(`Error loading stats: ${error.message}`, true); // Show error to user
+            showNotification(`Error loading stats: ${error.message}`, true);
         }
     }
 
     async function fetchEmployees(searchTerm = '', department = '') {
-         console.log(`scripts.js: fetchEmployees called with search: "${searchTerm}", department: "${department}"`); // Add log
+         console.log(`scripts.js: fetchEmployees called with search: "${searchTerm}", department: "${department}"`);
          if (!employeeTableBody || !tableSpinner || !tableContainer || !departmentFilter) {
              console.error("Employee list or related elements not found!");
              return;
          }
 
-        // --- SPINNER LOGIC (START) ---
         tableSpinner.classList.remove('hidden');
         tableContainer.classList.add('hidden');
-        employeeTableBody.innerHTML = ''; // Clear previous results immediately
+        employeeTableBody.innerHTML = ''; 
 
         try {
-            // --- MODIFIED: Fetch linked username as well ---
             const response = await fetch(`${API_BASE_URL}/employees?search=${encodeURIComponent(searchTerm)}&department=${encodeURIComponent(department)}&include_linked_user=true`, {
                 credentials: 'include'
             });
             if (!response.ok) {
-                if(response.status === 401 || response.status === 403) return; // Handled by auth.js
+                if(response.status === 401 || response.status === 403) return;
                  let errorMsg = `Failed to fetch employees (${response.status})`;
                  try {
                      const errorData = await response.json();
@@ -158,20 +190,17 @@ function runPageLogic() {
                 throw new Error(errorMsg);
             }
             const data = await response.json();
-            console.log("scripts.js: Employee data received:", data); // Add log
+            console.log("scripts.js: Employee data received:", data);
 
-            // Populate table
             if (!data.employees || data.employees.length === 0) {
                 employeeTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-gray-500">No employees found matching criteria.</td></tr>`;
             } else {
                 data.employees.forEach(emp => {
                     const row = document.createElement('tr');
-                    // --- NEW: Add linked username display ---
                     const linkedUserText = emp.linked_username 
                         ? `<span class="text-xs text-blue-600">(${emp.linked_username})</span>` 
                         : `<span class="text-xs text-gray-400">(Unlinked)</span>`;
                     
-                    // Add null checks for safety
                     row.innerHTML = `
                         <td class="py-2 px-4 border-b">${emp.employee_id ?? 'N/A'}</td>
                         <td class="py-2 px-4 border-b">
@@ -194,11 +223,10 @@ function runPageLogic() {
                 });
             }
 
-            // Populate department filter (only if needed and departments exist)
             if (departmentFilter.options.length <= 1 && data.departments && data.departments.length > 0) {
-                 console.log("scripts.js: Populating department filter."); // Add log
+                 console.log("scripts.js: Populating department filter.");
                  data.departments.forEach(dep => {
-                     if (dep) { // Avoid adding null/empty departments
+                     if (dep) { 
                         const option = document.createElement('option');
                         option.value = dep;
                         option.textContent = dep;
@@ -207,16 +235,14 @@ function runPageLogic() {
                 });
             }
 
-            // Render the department distribution chart
-            renderDepartmentChart(data.employees || []); // Pass empty array if no employees
+            renderDepartmentChart(data.employees || []);
 
         } catch (error) {
             console.error('Fetch employees error:', error);
             showNotification(`Failed to load employee data: ${error.message}`, true);
-            employeeTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error loading employees.</td></tr>`; // Show error in table
-             renderDepartmentChart([]); // Render empty chart on error
+            employeeTableBody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-red-500">Error loading employees.</td></tr>`;
+             renderDepartmentChart([]);
         } finally {
-            // --- SPINNER LOGIC (END) ---
             tableSpinner.classList.add('hidden');
             tableContainer.classList.remove('hidden');
         }
@@ -224,82 +250,85 @@ function runPageLogic() {
 
     // --- CHART RENDERING ---
     function renderDepartmentChart(employees) {
-        console.log("scripts.js: renderDepartmentChart called."); // Add log
+        console.log("scripts.js: renderDepartmentChart called.");
         if (!departmentChartCanvas) {
              console.error("Department chart canvas not found!");
              return;
         }
+        
+        const chartCtx = departmentChartCanvas.getContext('2d');
+        if (!chartCtx) {
+            console.error("Failed to get chart canvas context");
+            return;
+        }
 
-        // Calculate employee count per department
         const departmentCounts = (employees || []).reduce((acc, emp) => {
-             const dept = emp.department || 'Unknown'; // Group null/empty departments
+             const dept = emp.department || 'Unknown';
             acc[dept] = (acc[dept] || 0) + 1;
             return acc;
         }, {});
 
-        // Prepare data for Chart.js
         const chartData = {
             labels: Object.keys(departmentCounts),
             datasets: [{
                 label: 'Employees per Department',
                 data: Object.values(departmentCounts),
-                backgroundColor: [ // Add more colors if needed
-                    'rgba(54, 162, 235, 0.7)', // Blue
-                    'rgba(255, 99, 132, 0.7)',  // Red
-                    'rgba(75, 192, 192, 0.7)',  // Green
-                    'rgba(255, 206, 86, 0.7)',  // Yellow
-                    'rgba(153, 102, 255, 0.7)', // Purple
-                    'rgba(255, 159, 64, 0.7)'   // Orange
+                backgroundColor: [
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                    'rgba(255, 159, 64, 0.7)'
                 ],
-                 borderColor: '#fff', // Add white border for separation
+                 borderColor: '#fff',
                  borderWidth: 1
             }]
         };
 
-        // Destroy previous chart instance if it exists
         if (departmentChart) {
             departmentChart.destroy();
-            departmentChart = null; // Ensure it's reset
+            departmentChart = null;
         }
 
-        // Only create chart if there's data
          if (Object.keys(departmentCounts).length > 0) {
             try {
-                departmentChart = new Chart(departmentChartCanvas, {
-                    type: 'pie', // Or 'doughnut'
+                departmentChart = new Chart(chartCtx, { // Use chartCtx
+                    type: 'pie',
                     data: chartData,
                     options: {
                         responsive: true,
-                        maintainAspectRatio: false, // Allows chart to fit container height
+                        maintainAspectRatio: false,
                         plugins: {
                             legend: {
-                                position: 'top', // Position the legend at the top
+                                position: 'top',
                                 labels: {
-                                    padding: 15 // Add padding to legend items
+                                    padding: 15
                                 }
                             },
                             tooltip: {
                                 callbacks: {
-                                     // Show count in tooltip
                                      label: (context) => `${context.label}: ${context.raw}`
                                 }
                             }
                         },
                          layout: {
-                             padding: 5 // Add small padding around chart
+                             padding: 5
                          }
                     }
                 });
-                 console.log("scripts.js: Department chart rendered."); // Add log
+                 console.log("scripts.js: Department chart rendered.");
             } catch (chartError) {
                  console.error("scripts.js: Error rendering department chart:", chartError);
-                 // Optionally display an error message on the canvas container
-                 departmentChartCanvas.parentElement.innerHTML = '<p class="text-red-500 text-center">Could not display chart.</p>';
+                 if (departmentChartCanvas.parentElement) {
+                     departmentChartCanvas.parentElement.innerHTML = '<p class="text-red-500 text-center">Could not display chart.</p>';
+                 }
             }
          } else {
-             console.log("scripts.js: No department data to render chart."); // Add log
-              // Optionally display a "No data" message
-              departmentChartCanvas.parentElement.innerHTML = '<p class="text-gray-500 text-center">No department data available.</p>';
+             console.log("scripts.js: No department data to render chart.");
+              if (departmentChartCanvas.parentElement) {
+                 departmentChartCanvas.parentElement.innerHTML = '<p class="text-gray-500 text-center">No department data available.</p>';
+              }
          }
     }
 
@@ -310,18 +339,17 @@ function runPageLogic() {
     if (addEmployeeForm) {
         addEmployeeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            console.log("scripts.js: Add employee form submitted."); // Add log
+            console.log("scripts.js: Add employee form submitted.");
             const formData = new FormData(addEmployeeForm);
             const newEmployee = Object.fromEntries(formData.entries());
 
-            // Simple validation (can be more robust)
             if (!newEmployee.name || !newEmployee.department || !newEmployee.position || !newEmployee.joining_date || !newEmployee.base_salary) {
                 showNotification("Please fill in all employee fields.", true);
                 return;
             }
 
              const submitButton = addEmployeeForm.querySelector('button[type="submit"]');
-             if(submitButton) submitButton.disabled = true; // Disable button during submission
+             if(submitButton) submitButton.disabled = true;
 
             try {
                 const response = await fetch(`${API_BASE_URL}/employees`, {
@@ -330,11 +358,10 @@ function runPageLogic() {
                     body: JSON.stringify(newEmployee),
                     credentials: 'include'
                 });
-                 // Try parsing JSON even for errors
                  let data;
                  try {
                      data = await response.json();
-                     console.log("scripts.js: Add employee response:", data); // Add log
+                     console.log("scripts.js: Add employee response:", data);
                  } catch (jsonError) {
                      throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
                  }
@@ -344,71 +371,66 @@ function runPageLogic() {
                 }
                 showNotification('Employee added successfully!');
                 addEmployeeForm.reset();
-                fetchEmployees(); // Refresh list and chart
-                fetchDashboardStats(); // Refresh stats
+                fetchEmployees();
+                fetchDashboardStats();
 
             } catch (error) {
                 console.error('Add employee error:', error);
                 showNotification(`Error adding employee: ${error.message}`, true);
             } finally {
-                 if(submitButton) submitButton.disabled = false; // Re-enable button
+                 if(submitButton) submitButton.disabled = false;
             }
         });
     } else {
-         console.warn("scripts.js: Add employee form not found."); // Add log
+         console.warn("scripts.js: Add employee form not found.");
     }
 
 
     // Event Delegation for Edit and Delete buttons
     if (employeeTableBody) {
         employeeTableBody.addEventListener('click', async (e) => {
-            // Target the button itself, even if icon inside is clicked
             const button = e.target.closest('button[data-action]');
-            if (!button) return; // Exit if click wasn't on an action button
+            if (!button) return; 
 
             const action = button.dataset.action;
             const id = button.dataset.id;
-            console.log(`scripts.js: Action "${action}" clicked for employee ID ${id}`); // Add log
+            console.log(`scripts.js: Action "${action}" clicked for employee ID ${id}`);
 
 
             if (action === 'delete') {
                  if (!confirmModal || !confirmMessage || !confirmYesButton || !confirmNoButton) {
                      console.error("Confirmation modal elements not found!");
-                     if(confirm("Are you sure you want to delete this employee? (Modal failed)")) { // Fallback confirm
-                         // Proceed with deletion logic directly if modal fails - NOT IDEAL
+                     if(confirm("Are you sure you want to delete this employee? (Modal failed)")) {
                          await proceedWithDelete(id);
                      }
                      return;
                  }
                 employeeToDeleteId = id;
                 confirmMessage.textContent = `Are you sure you want to delete employee ID ${id}? This action cannot be undone.`;
-                confirmModal.classList.remove('hidden');
+                showConfirmModal(); // Use helper
             }
             else if (action === 'edit') {
-                 if (!editModal || !editForm || !editUserIdSelect) { // Check for dropdown too
+                 if (!editModal || !editForm || !editUserIdSelect) {
                      console.error("Edit modal elements not found!");
                      alert("Cannot open edit form. Please refresh.");
                      return;
                  }
                 try {
-                     button.textContent = 'Loading...'; // Indicate loading
+                     button.textContent = 'Loading...';
                      button.disabled = true;
 
-                     // --- NEW: Reset dropdown and set loading state ---
                      editUserIdSelect.innerHTML = '<option value="">Loading users...</option>';
                      editUserIdSelect.disabled = true;
 
-                     // --- NEW: Fetch unlinked users first ---
                      const usersResponse = await fetch(`${API_BASE_URL}/users/unlinked`, { credentials: 'include' });
                      if (!usersResponse.ok) {
                         throw new Error(`Failed to load unlinked users (${usersResponse.status})`);
                      }
                      const unlinkedUsers = await usersResponse.json();
 
-                     // --- MODIFIED: Fetch employee with linked user info ---
                     const response = await fetch(`${API_BASE_URL}/employees/${id}?include_linked_user=true`, { credentials: 'include' });
                     if (!response.ok) {
-                         if(response.status === 401 || response.status === 403) return; // Auth handled
+                         if(response.status === 401 || response.status === 403) return;
                          let errorMsg = `Failed to load employee data (${response.status})`;
                          try {
                              const errorData = await response.json();
@@ -417,75 +439,68 @@ function runPageLogic() {
                         throw new Error(errorMsg);
                     }
                     const employee = await response.json();
-                    console.log("scripts.js: Editing employee:", employee); // Add log
+                    console.log("scripts.js: Editing employee:", employee);
 
-                    // Fill the edit form fields safely
+                    // Fill the edit form fields
+                    // Use .elements for robust form filling
                     editForm.elements['employee_id'].value = employee.employee_id ?? '';
                     editForm.elements['name'].value = employee.name ?? '';
                     editForm.elements['department'].value = employee.department ?? '';
                     editForm.elements['position'].value = employee.position ?? '';
-                    // Ensure date format is YYYY-MM-DD
-                    editForm.elements['joining_date'].value = (employee.joining_date ? employee.joining_date.split('T')[0] : ''); // Use split('T') for safety
+                    editForm.elements['joining_date'].value = (employee.joining_date ? employee.joining_date.split('T')[0] : '');
                     editForm.elements['base_salary'].value = employee.base_salary ?? '';
 
-                    // --- NEW: Populate and set dropdown ---
-                    editUserIdSelect.innerHTML = ''; // Clear loading
-                    editUserIdSelect.add(new Option('-- Unlinked --', '')); // Add default unlinked option
+                    // Populate and set dropdown
+                    editUserIdSelect.innerHTML = '';
+                    editUserIdSelect.add(new Option('-- Unlinked --', ''));
                     
-                    // Add all unlinked users
                     unlinkedUsers.forEach(user => {
                         editUserIdSelect.add(new Option(user.username, user.id));
                     });
 
-                    // If employee is already linked, add their user to the list
                     const currentUserId = employee.user_id;
                     const currentUsername = employee.linked_username;
                     
                     if (currentUserId && currentUsername) {
-                        // Check if this user is somehow already in the unlinked list (shouldn't happen, but safe check)
                         const alreadyInList = unlinkedUsers.some(user => user.id === currentUserId);
                         if (!alreadyInList) {
-                            // Add the currently linked user to the dropdown
                             editUserIdSelect.add(new Option(`${currentUsername} (Currently Linked)`, currentUserId));
                         }
                     }
 
-                    // Set the dropdown's selected value
                     editUserIdSelect.value = currentUserId || '';
-                    editUserIdSelect.disabled = false; // Enable dropdown
+                    editUserIdSelect.disabled = false;
 
-                    editModal.classList.remove('hidden');
+                    showEditModal(); // Use helper
 
                 } catch (error) {
                     console.error('Edit load error:', error);
                     showNotification(`Could not load employee data for editing: ${error.message}`, true);
-                    editUserIdSelect.innerHTML = '<option value="">Error loading users</option>'; // Show error in dropdown
+                    editUserIdSelect.innerHTML = '<option value="">Error loading users</option>';
                 } finally {
-                     button.textContent = 'Edit'; // Restore button text
+                     button.textContent = 'Edit';
                      button.disabled = false;
-                     // Ensure dropdown is enabled if modal didn't open
                      editUserIdSelect.disabled = false;
                 }
             }
         });
     } else {
-         console.warn("scripts.js: Employee table body not found for event delegation."); // Add log
+         console.warn("scripts.js: Employee table body not found for event delegation.");
     }
 
     // Function to handle deletion after confirmation
      async function proceedWithDelete(id) {
          if (!id) return;
-         console.log(`scripts.js: Proceeding with delete for employee ID ${id}`); // Add log
+         console.log(`scripts.js: Proceeding with delete for employee ID ${id}`);
          try {
              const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
                  method: 'DELETE',
                  credentials: 'include'
              });
-              // Try parsing JSON even for errors
              let data;
              try {
                  data = await response.json();
-                 console.log("scripts.js: Delete response:", data); // Add log
+                 console.log("scripts.js: Delete response:", data);
              } catch (jsonError) {
                   throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
              }
@@ -494,15 +509,14 @@ function runPageLogic() {
                  throw new Error(data.error || `Failed to delete employee (Status: ${response.status})`);
              }
              showNotification('Employee deleted successfully.');
-             fetchEmployees(searchInput.value, departmentFilter.value); // Refresh list/chart
-             fetchDashboardStats(); // Refresh stats
+             fetchEmployees(searchInput.value, departmentFilter.value);
+             fetchDashboardStats();
          } catch (error) {
              console.error('Delete error:', error);
              showNotification(`Error deleting employee: ${error.message}`, true);
          } finally {
-             // Reset state and hide modal (ensure modal elements exist)
              employeeToDeleteId = null;
-             if (confirmModal) confirmModal.classList.add('hidden');
+             hideConfirmModal(); // Use helper
          }
      }
 
@@ -512,7 +526,7 @@ function runPageLogic() {
         editForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const id = e.target.elements['employee_id'].value;
-             console.log(`scripts.js: Edit form submitted for employee ID ${id}`); // Add log
+             console.log(`scripts.js: Edit form submitted for employee ID ${id}`);
 
             const updatedData = {
                 name: e.target.elements['name'].value,
@@ -520,18 +534,16 @@ function runPageLogic() {
                 position: e.target.elements['position'].value,
                 joining_date: e.target.elements['joining_date'].value,
                 base_salary: e.target.elements['base_salary'].value,
-                // --- NEW: Get the selected user_id from the dropdown ---
                 user_id: e.target.elements['user_id'].value
             };
 
-            // Simple validation
              if (!updatedData.name || !updatedData.department || !updatedData.position || !updatedData.joining_date || !updatedData.base_salary) {
                 showNotification("Please fill in all employee fields.", true);
                 return;
             }
 
              const saveButton = editForm.querySelector('button[type="submit"]');
-             if(saveButton) saveButton.disabled = true; // Disable button
+             if(saveButton) saveButton.disabled = true;
 
             try {
                 const response = await fetch(`${API_BASE_URL}/employees/${id}`, {
@@ -540,11 +552,10 @@ function runPageLogic() {
                     body: JSON.stringify(updatedData),
                     credentials: 'include'
                 });
-                // Try parsing JSON even for errors
                  let data;
                  try {
                      data = await response.json();
-                      console.log("scripts.js: Edit response:", data); // Add log
+                      console.log("scripts.js: Edit response:", data);
                  } catch (jsonError) {
                      throw new Error(`Server returned non-JSON response (Status: ${response.status})`);
                  }
@@ -552,62 +563,45 @@ function runPageLogic() {
                 if (!response.ok) {
                     throw new Error(data.error || `Failed to update employee (Status: ${response.status})`);
                 }
-                if (editModal) editModal.classList.add('hidden'); // Hide modal on success
-                showNotification(data.message || 'Employee updated successfully!'); // Use message from backend if available
+                hideEditModal(); // Use helper
+                showNotification(data.message || 'Employee updated successfully!');
                 
-                // --- MODIFIED: Refresh list/chart with current filters ---
                 fetchEmployees(searchInput.value, departmentFilter.value); 
-                fetchDashboardStats(); // Refresh stats
+                fetchDashboardStats();
             } catch (error) {
                  console.error('Update error:', error);
-                 // --- NEW: Check for specific 409 (Conflict) error ---
                  if (error.message.includes("409")) {
                      showNotification("Update failed: This user account is already linked to another employee.", true);
                  } else {
                      showNotification(`Error updating employee: ${error.message}`, true);
                  }
             } finally {
-                 if(saveButton) saveButton.disabled = false; // Re-enable button
+                 if(saveButton) saveButton.disabled = false;
             }
         });
     } else {
-         console.warn("scripts.js: Edit form not found."); // Add log
+         console.warn("scripts.js: Edit form not found.");
     }
 
 
-    // Confirmation Modal Buttons
+    // --- MODAL CLOSING LISTENERS ---
     if (confirmYesButton) {
         confirmYesButton.addEventListener('click', () => proceedWithDelete(employeeToDeleteId));
-    } else {
-         console.warn("scripts.js: Confirm Yes button not found."); // Add log
     }
-
     if (confirmNoButton) {
-        confirmNoButton.addEventListener('click', () => {
-             console.log("scripts.js: Delete cancelled."); // Add log
-             employeeToDeleteId = null;
-            if (confirmModal) confirmModal.classList.add('hidden');
-        });
-    } else {
-        console.warn("scripts.js: Confirm No button not found."); // Add log
+        confirmNoButton.addEventListener('click', hideConfirmModal);
     }
-
-
-    // Modal Closing Buttons
+    if (confirmModalBackdrop) {
+        confirmModalBackdrop.addEventListener('click', hideConfirmModal);
+    }
     if (closeModalButton) {
-        closeModalButton.addEventListener('click', () => {
-             if (editModal) editModal.classList.add('hidden');
-        });
-    } else {
-         console.warn("scripts.js: Close Modal button not found."); // Add log
+        closeModalButton.addEventListener('click', hideEditModal);
     }
-
     if (cancelEditButton) {
-        cancelEditButton.addEventListener('click', () => {
-             if (editModal) editModal.classList.add('hidden');
-        });
-    } else {
-         console.warn("scripts.js: Cancel Edit button not found."); // Add log
+        cancelEditButton.addEventListener('click', hideEditModal);
+    }
+     if (editModalBackdrop) {
+        editModalBackdrop.addEventListener('click', hideEditModal);
     }
 
 
@@ -617,30 +611,30 @@ function runPageLogic() {
         searchInput.addEventListener('input', () => {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                 console.log("scripts.js: Search input changed, fetching..."); // Add log
+                 console.log("scripts.js: Search input changed, fetching...");
                  fetchEmployees(searchInput.value, departmentFilter.value);
             }, 300); // 300ms delay
         });
     } else {
-         console.warn("scripts.js: Search input not found."); // Add log
+         console.warn("scripts.js: Search input not found.");
     }
 
 
     // Department Filter Dropdown
     if (departmentFilter) {
         departmentFilter.addEventListener('change', () => {
-             console.log("scripts.js: Department filter changed, fetching..."); // Add log
+             console.log("scripts.js: Department filter changed, fetching...");
              fetchEmployees(searchInput.value, departmentFilter.value);
         });
     } else {
-         console.warn("scripts.js: Department filter not found."); // Add log
+         console.warn("scripts.js: Department filter not found.");
     }
 
 
     // Logout Button
     if (logoutButton) {
         logoutButton.addEventListener('click', async () => {
-            console.log("scripts.js: Logout button clicked."); // Add log
+            console.log("scripts.js: Logout button clicked.");
             logoutButton.textContent = 'Logging out...';
             logoutButton.disabled = true;
             try {
@@ -654,13 +648,12 @@ function runPageLogic() {
             }
         });
     } else {
-         console.warn("scripts.js: Logout button not found."); // Add log
+         console.warn("scripts.js: Logout button not found.");
     }
 
     // --- INITIAL DATA LOAD ---
-    console.log("scripts.js: Calling initial fetch functions inside runPageLogic."); // Add log
-    // --- FIX: Call setUsername at the start ---
-    setUsername(); // Set the username in the header first
+    console.log("scripts.js: Calling initial fetch functions inside runPageLogic.");
+    setUsername(); // Set the username in the header
     fetchEmployees();
     fetchDashboardStats();
 

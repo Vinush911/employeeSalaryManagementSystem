@@ -22,8 +22,12 @@ function runPageLogic() {
     const slipPfEl = document.getElementById('slip-pf');
     const slipTotalDeductionsEl = document.getElementById('slip-total-deductions');
 
+    // === FIX: Added selector for the missing element ===
+    const slipNetTotalEl = document.getElementById('slip-net-total');
+    // === END FIX ===
+
     // Basic check if critical elements are missing
-    if (!slipPayPeriodEl || !slipEmployeeNameEl || !slipNetPayEl) {
+    if (!slipPayPeriodEl || !slipEmployeeNameEl || !slipNetPayEl || !slipNetTotalEl) { // Added check
         console.error("slip.js: Critical slip elements not found!");
         document.body.innerHTML = '<h1 class="text-red-500 p-4">Error: Page elements missing. Cannot display slip.</h1>';
         return;
@@ -52,7 +56,10 @@ function runPageLogic() {
     const formatDate = (dateString) => {
         if (!dateString) return 'N/A';
         try {
-            const date = new Date(dateString + 'T00:00:00');
+            // Robust parsing for 'YYYY-MM-DD'
+            const parts = dateString.split('-');
+            if (parts.length < 2) return 'N/A';
+            const date = new Date(parts[0], parts[1] - 1, 1); // Use 1st day
             if (isNaN(date.getTime())) return 'N/A';
             return date.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
         } catch (e) { return 'N/A'; }
@@ -62,7 +69,10 @@ function runPageLogic() {
     const formatMonthYear = (dateString) => {
         if (!dateString) return 'N/A';
         try {
-            const date = new Date(dateString + 'T00:00:00');
+            // Robust parsing for 'YYYY-MM-DD'
+            const parts = dateString.split('-');
+            if (parts.length < 2) return 'N/A';
+            const date = new Date(parts[0], parts[1] - 1, 1); // Use 1st day
             if (isNaN(date.getTime())) return 'N/A';
             return date.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
         } catch (e) { return 'N/A'; }
@@ -147,8 +157,8 @@ function runPageLogic() {
         slipPayPeriodEl.textContent = 'Loading...';
         slipEmployeeNameEl.textContent = 'Loading...';
         slipNetPayEl.textContent = 'Loading...';
-        // ... set loading for other elements if desired
-
+        slipNetTotalEl.textContent = '...'; // Set loading for the new element
+        
         try {
             const response = await fetch(`${API_BASE_URL}/salaries/${salaryId}`, { credentials: 'include' });
             if (!response.ok) {
@@ -175,7 +185,8 @@ function runPageLogic() {
 
             // Populate Employee Details (using ?? nullish coalescing for defaults)
             slipPayPeriodEl.textContent = formatMonthYear(slip.month);
-            slipPayDateEl.textContent = formatDate(new Date().toISOString().split('T')[0]); // Use today's date
+            // Use today's date for pay date (or slip.paid_on if you add it later)
+            slipPayDateEl.textContent = formatDate(new Date().toISOString().split('T')[0]); 
             slipEmployeeNameEl.textContent = slip.name ?? 'N/A';
             slipEmployeeIdEl.textContent = slip.employee_id ?? 'N/A';
             slipDepartmentEl.textContent = slip.department ?? 'N/A';
@@ -205,6 +216,10 @@ function runPageLogic() {
             const totalSalary = slip.total_salary ?? 0; // Use total calculated by DB trigger
             slipNetPayEl.textContent = formatCurrency(totalSalary);
             slipNetPayWordsEl.textContent = `(Rupees ${toWords(totalSalary)})`;
+
+            // === FIX: Populate the final net pay box at the bottom ===
+            slipNetTotalEl.textContent = formatCurrency(totalSalary);
+            // === END FIX ===
 
             // --- IMPORTANT: Trigger print AFTER data is populated ---
             // Use a small timeout to allow the browser to render the updated content
@@ -241,4 +256,3 @@ function runPageLogic() {
 
 // --- Add the event listener at the VERY END to call runPageLogic ---
 document.addEventListener('DOMContentLoaded', runPageLogic);
-

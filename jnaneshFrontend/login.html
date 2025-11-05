@@ -17,6 +17,8 @@
       color: #7c3aed;
     }
   </style>
+  <!-- Auth.js runs first to check if already logged in -->
+  <script src="auth.js" defer></script>
 </head>
 <body class="bg-gradient-to-br from-indigo-400 via-pink-300 to-yellow-200 flex items-center justify-center min-h-screen">
 
@@ -79,25 +81,12 @@
     </form>
   </div>
 
-  <script>
-    const loginTab = document.getElementById('login-tab');
-    const registerTab = document.getElementById('register-tab');
-    const loginForm = document.getElementById('login-form');
-    const registerForm = document.getElementById('register-form');
-
-    loginTab.addEventListener('click', () => {
-      loginForm.classList.remove('hidden');
-      registerForm.classList.add('hidden');
-      loginTab.classList.add('border-purple-500', 'text-purple-700');
-      registerTab.classList.remove('border-pink-500', 'text-pink-600');
-    });
-
-    registerTab.addEventListener('click', () => {
-      registerForm.classList.remove('hidden');
-      loginForm.classList.add('hidden');
-      registerTab.classList.add('border-pink-500', 'text-pink-600');
-      loginTab.classList.remove('border-purple-500', 'text-purple-700');
-    });
-  </script>
+  <!-- 
+    === FIX: ADDED SCRIPT TAG FOR LOGIN LOGIC ===
+    This was missing. I also moved the inline script for tab switching
+    into login.js to keep this file clean.
+  -->
+  <script src="login.js" defer></script>
+  
 </body>
 </html>

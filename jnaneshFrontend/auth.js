@@ -9,9 +9,18 @@ const API_AUTH_URL = 'http://127.0.0.1:5000/api/check-auth';
   console.log(`[auth.js] Checking auth for page: ${currentPage}`);
 
   // 🔒 Page access definitions
-  const adminPages = ['index.html', 'payroll.html', 'reports.html', 'attendance.html', 'salary.html'];
+  // === FIX: Added 'leave_admin.html' and corrected 'report.html' ===
+  const adminPages = [
+    'index.html', 
+    'payroll.html', 
+    'report.html', // Fixed from 'reports.html'
+    'attendance.html', 
+    'salary.html',
+    'leave_admin.html' // Added this page
+  ];
   const employeePages = ['my_dashboard.html'];
   const sharedPages = ['slip.html'];
+  // === END FIX ===
 
   try {
     const response = await fetch(API_AUTH_URL, { credentials: 'include' });
@@ -39,7 +48,7 @@ const API_AUTH_URL = 'http://127.0.0.1:5000/api/check-auth';
     // ✅ User is logged in
     const { role, username } = data;
     const isAdmin = role === 'admin';
-    const isEmployee = role === 'employee';
+    const isEmployee = role ==='employee';
 
     if (!isAdmin && !isEmployee) {
       console.warn(`[auth.js] Unknown role "${role}". Redirecting to login.`);

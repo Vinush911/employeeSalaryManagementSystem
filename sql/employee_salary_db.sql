@@ -224,3 +224,26 @@ SET user_id = 4    -- The ID of the 'jnanesh' user account
 WHERE employee_id = 14; -- The ID of the 'jnanesh' employee record
 
 SELECT employee_id, name, user_id FROM Employee WHERE employee_id = 13;
+
+
+USE employee_salary_db;
+
+-- 1. Create the new LeaveRequest table
+CREATE TABLE LeaveRequest (
+    request_id INT PRIMARY KEY AUTO_INCREMENT,
+    employee_id INT NOT NULL,
+    start_date DATE NOT NULL,
+    end_date DATE NOT NULL,
+    reason VARCHAR(255),
+    status VARCHAR(20) NOT NULL DEFAULT 'pending', -- pending, approved, denied
+    requested_on TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (employee_id) REFERENCES Employee(employee_id) ON DELETE CASCADE
+);
+
+-- 2. Add a UNIQUE key to the Attendance table
+-- This is CRITICAL for the automatic update logic to work.
+-- It prevents duplicate rows for the same employee and month.
+ALTER TABLE Attendance
+ADD UNIQUE KEY `uk_employee_month` (employee_id, month);
+
+SELECT 'LeaveRequest table created and Attendance table updated successfully' AS Status;

@@ -7,24 +7,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const API_BASE_URL = 'http://127.0.0.1:5000/api';
 
-    // --- Tab Switching Logic ---
+    // --- Tab Switching Logic (Merged from HTML) ---
     loginTab.addEventListener('click', () => {
-        loginTab.classList.add('border-blue-500', 'text-blue-600');
-        loginTab.classList.remove('border-transparent', 'text-gray-500');
-        registerTab.classList.add('border-transparent', 'text-gray-500');
-        registerTab.classList.remove('border-blue-500', 'text-blue-600');
         loginForm.classList.remove('hidden');
         registerForm.classList.add('hidden');
+        
+        // --- FIX: Use correct classes from new HTML ---
+        loginTab.classList.add('border-purple-500', 'text-purple-700');
+        loginTab.classList.remove('border-transparent', 'text-gray-500');
+        
+        registerTab.classList.add('border-transparent', 'text-gray-500');
+        registerTab.classList.remove('border-pink-500', 'text-pink-600');
+        // --- END FIX ---
     });
 
     registerTab.addEventListener('click', () => {
-        registerTab.classList.add('border-blue-500', 'text-blue-600');
-        registerTab.classList.remove('border-transparent', 'text-gray-500');
-        loginTab.classList.add('border-transparent', 'text-gray-500');
-        loginTab.classList.remove('border-blue-500', 'text-blue-600');
         registerForm.classList.remove('hidden');
         loginForm.classList.add('hidden');
+
+        // --- FIX: Use correct classes from new HTML ---
+        registerTab.classList.add('border-pink-500', 'text-pink-600');
+        registerTab.classList.remove('border-transparent', 'text-gray-500');
+
+        loginTab.classList.add('border-transparent', 'text-gray-500');
+        loginTab.classList.remove('border-purple-500', 'text-purple-700');
+        // --- END FIX ---
     });
+    // --- End of Merged Logic ---
+
 
     // --- Login Form Submission ---
     loginForm.addEventListener('submit', async (e) => {
